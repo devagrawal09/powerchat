@@ -7,8 +7,14 @@
     "start": "vinxi start"
   },
   "dependencies": {
+    "@mastra/core": "^0.23.1",
+    "@powersync/common": "^1.40.0",
+    "@powersync/web": "^1.27.1",
     "@solidjs/router": "^0.15.0",
     "@solidjs/start": "^1.1.0",
+    "@types/pg": "^8.15.6",
+    "jose": "^6.1.0",
+    "pg": "^8.16.3",
     "solid-js": "^1.9.5",
     "vinxi": "^0.5.7"
   },
