@@ -1,30 +1,73 @@
-import { Component, createResource, For, Show, Suspense } from "solid-js";
-import { A, useAction, useSubmission } from "@solidjs/router";
-import { getPowerSync } from "~/lib/powersync";
-import { createChannel } from "~/server/actions";
+import { For, Show, Suspense, createSignal, JSX } from "solid-js";
+import { A } from "@solidjs/router";
+import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { writeTransaction } from "~/lib/powersync";
 
-export default function ChatLayout(props: any) {
-  // Query channels from PowerSync local DB
-  const [channels] = createResource(async () => {
-    const db = await getPowerSync();
-    const result = await db.execute(
+type ChannelRow = {
+  id: string;
+  name: string;
+  created_by: string | null;
+  created_at: string;
+};
+
+export default function ChatLayout(props: { children?: JSX.Element }) {
+  // Watch channels from PowerSync local DB
+  const channels = useWatchedQuery<ChannelRow>(
+    () =>
       `SELECT c.* FROM channels c
        JOIN channel_members cm ON cm.channel_id = c.id
        WHERE cm.member_type = 'user'
        ORDER BY c.created_at DESC`
-    );
-    return result.rows?._array || [];
-  });
+  );
 
-  const createChannelAction = useAction(createChannel);
-  const submission = useSubmission(createChannel);
+  const [creating, setCreating] = createSignal(false);
 
-  const handleCreateChannel = (e: Event) => {
+  const handleCreateChannel = async (e: Event) => {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
     const formData = new FormData(form);
-    createChannelAction(formData);
-    form.reset();
+    const name = String(formData.get("name") || "").trim();
+    if (!name) return;
+
+    setCreating(true);
+    try {
+      const channelId = crypto.randomUUID();
+      const userId = localStorage.getItem("pc_uid") || crypto.randomUUID();
+      if (!localStorage.getItem("pc_uid"))
+        localStorage.setItem("pc_uid", userId);
+
+      await writeTransaction(async (tx) => {
+        // Ensure user exists first
+        const existingUser = await tx.execute(
+          `SELECT id FROM users WHERE id = ?`,
+          [userId]
+        );
+        if (!existingUser.rows?._array?.length) {
+          await tx.execute(
+            `INSERT INTO users (id, display_name, created_at) VALUES (?, ?, datetime('now'))`,
+            [userId, "Anonymous"]
+          );
+        }
+
+        // Insert channel
+        await tx.execute(
+          `INSERT INTO channels (id, name, created_by, created_at) VALUES (?, ?, ?, datetime('now'))`,
+          [channelId, name, userId]
+        );
+
+        // Insert channel membership
+        await tx.execute(
+          `INSERT INTO channel_members (id, channel_id, member_type, member_id, joined_at) VALUES (?, ?, 'user', ?, datetime('now'))`,
+          [crypto.randomUUID(), channelId, userId]
+        );
+      });
+
+      form.reset();
+    } catch (err) {
+      console.error("Failed to create channel", err);
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -43,9 +86,9 @@ export default function ChatLayout(props: any) {
           <Suspense
             fallback={<div class="px-2 text-sm text-gray-500">Loading...</div>}
           >
-            <Show when={channels()}>
-              <For each={channels()}>
-                {(channel: any) => (
+            <Show when={!channels.loading}>
+              <For each={channels.data}>
+                {(channel) => (
                   <A
                     href={`/channel/${channel.id}`}
                     class="block px-2 py-1.5 rounded hover:bg-gray-100 text-sm text-gray-900"
@@ -71,10 +114,10 @@ export default function ChatLayout(props: any) {
             />
             <button
               type="submit"
-              disabled={submission.pending}
+              disabled={creating()}
               class="w-full mt-2 px-3 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50"
             >
-              {submission.pending ? "Creating..." : "Create Channel"}
+              {creating() ? "Creating..." : "Create Channel"}
             </button>
           </form>
         </div>

@@ -1,8 +1,7 @@
 import { action } from "@solidjs/router";
-import { query, getOne } from "./db";
+import { query } from "./db";
 import { getCookie } from "vinxi/http";
 import { getRequestEvent } from "solid-js/web";
-import { triggerAgent } from "./agent";
 
 function getUserId(): string {
   const event = getRequestEvent();

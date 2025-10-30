@@ -4,6 +4,7 @@ import {
   PowerSyncBackendConnector,
 } from "@powersync/web";
 import { column, Schema, Table } from "@powersync/web";
+import { Transaction } from "@powersync/common";
 import {
   getPowerSyncToken,
   uploadData as uploadToServer,
@@ -27,7 +28,7 @@ class PowerChatConnector implements PowerSyncBackendConnector {
 
     try {
       // Call server function directly - no HTTP overhead!
-      await uploadToServer(transaction.crud as any);
+      await uploadToServer(transaction.crud);
 
       // Mark as complete only after successful write
       await transaction.complete();
@@ -59,6 +60,7 @@ const schema = new Schema({
   }),
   channel_members: new Table(
     {
+      id: column.text,
       channel_id: column.text,
       member_type: column.text,
       member_id: column.text,
@@ -83,6 +85,7 @@ const schema = new Schema({
     }
   ),
   message_mentions: new Table({
+    id: column.text,
     message_id: column.text,
     agent_id: column.text,
   }),
@@ -108,7 +111,7 @@ export async function getPowerSync(): Promise<PowerSyncDatabase> {
 
 // Helper to execute writes
 export async function writeTransaction<T>(
-  callback: (tx: any) => Promise<T>
+  callback: (tx: Transaction) => Promise<T>
 ): Promise<T> {
   const powersync = await getPowerSync();
   return powersync.writeTransaction(callback);

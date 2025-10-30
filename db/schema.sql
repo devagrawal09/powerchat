@@ -28,11 +28,12 @@ CREATE TABLE IF NOT EXISTS channels (
 
 -- Memberships: users or agents
 CREATE TABLE IF NOT EXISTS channel_members (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
   member_type TEXT NOT NULL CHECK (member_type IN ('user','agent')),
   member_id UUID NOT NULL,
   joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (channel_id, member_type, member_id)
+  UNIQUE (channel_id, member_type, member_id)
 );
 
 -- Messages
@@ -47,9 +48,10 @@ CREATE TABLE IF NOT EXISTS messages (
 
 -- Mentions of agents in a message
 CREATE TABLE IF NOT EXISTS message_mentions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
   agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-  PRIMARY KEY (message_id, agent_id)
+  UNIQUE (message_id, agent_id)
 );
 
 -- Indexes for performance

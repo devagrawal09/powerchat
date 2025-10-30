@@ -1,34 +1,47 @@
-import {
-  Component,
-  createResource,
-  createSignal,
-  For,
-  onMount,
-  Show,
-  Suspense,
-} from "solid-js";
+import { createSignal, For, Show, Suspense } from "solid-js";
 import { useParams } from "@solidjs/router";
-import { getPowerSync, writeTransaction } from "~/lib/powersync";
+import { writeTransaction } from "~/lib/powersync";
 import { triggerAgent } from "~/server/agent";
+import { useWatchedQuery } from "~/lib/useWatchedQuery";
+
+type ChannelRow = {
+  id: string;
+  name: string;
+  created_by: string | null;
+  created_at: string;
+};
+
+type MessageRow = {
+  id: string;
+  channel_id: string;
+  author_type: "user" | "agent" | "system";
+  author_id: string;
+  content: string;
+  created_at: string;
+  author_name?: string | null;
+};
+
+type AgentRow = {
+  id: string;
+  name: string;
+  model_config: string;
+  created_at: string;
+};
 
 export default function ChannelPage() {
   const params = useParams();
   const channelId = () => params.id;
   let messagesEndRef: HTMLDivElement | undefined;
 
-  // Query channel details
-  const [channel] = createResource(channelId, async (id) => {
-    const db = await getPowerSync();
-    const result = await db.execute(`SELECT * FROM channels WHERE id = ?`, [
-      id,
-    ]);
-    return result.rows?._array?.[0];
-  });
+  // Watch channel details
+  const channel = useWatchedQuery<ChannelRow>(
+    () => `SELECT * FROM channels WHERE id = ?`,
+    () => [channelId()]
+  );
 
-  // Query messages with stable ordering
-  const [messages, { refetch }] = createResource(channelId, async (id) => {
-    const db = await getPowerSync();
-    const result = await db.execute(
+  // Watch messages with stable ordering
+  const messages = useWatchedQuery<MessageRow>(
+    () =>
       `SELECT m.*, 
         CASE 
           WHEN m.author_type = 'user' THEN u.display_name
@@ -39,34 +52,22 @@ export default function ChannelPage() {
        LEFT JOIN agents a ON m.author_type = 'agent' AND m.author_id = a.id
        WHERE m.channel_id = ?
        ORDER BY m.created_at ASC, m.id ASC`,
-      [id]
-    );
-    return result.rows?._array || [];
-  });
+    () => [channelId()]
+  );
 
-  // Query agents in channel for autocomplete
-  const [agents] = createResource(channelId, async (id) => {
-    const db = await getPowerSync();
-    const result = await db.execute(
+  // Watch agents in channel for autocomplete
+  const agents = useWatchedQuery<AgentRow>(
+    () =>
       `SELECT a.* FROM agents a
        JOIN channel_members cm ON cm.member_id = a.id AND cm.member_type = 'agent'
        WHERE cm.channel_id = ?`,
-      [id]
-    );
-    return result.rows?._array || [];
-  });
+    () => [channelId()]
+  );
 
   const [content, setContent] = createSignal("");
   const [sending, setSending] = createSignal(false);
 
-  // Auto-scroll on new messages
-  onMount(() => {
-    const interval = setInterval(() => {
-      refetch();
-      messagesEndRef?.scrollIntoView({ behavior: "smooth" });
-    }, 2000);
-    return () => clearInterval(interval);
-  });
+  // Auto-scroll on new messages (watch keeps messages updated)
 
   const handleSend = async () => {
     const text = content().trim();
@@ -89,23 +90,21 @@ export default function ChannelPage() {
       // Detect @mentions
       const mentionMatches = text.matchAll(/@(\w+)/g);
       const mentionedNames = Array.from(mentionMatches).map((m) => m[1]);
-      const agentsList = agents() || [];
-      const mentionedAgents = agentsList.filter((a: any) =>
+      const agentsList = agents.data || [];
+      const mentionedAgents = agentsList.filter((a) =>
         mentionedNames.includes(a.name)
       );
 
       if (mentionedAgents.length > 0) {
-        // Trigger agent on server
         await triggerAgent({
           channelId: channelId(),
           messageId,
           content: text,
-          agentIds: mentionedAgents.map((a: any) => a.id),
+          agentIds: mentionedAgents.map((a) => a.id),
         });
       }
 
       setContent("");
-      refetch();
     } catch (error) {
       console.error("Failed to send message:", error);
     } finally {
@@ -116,40 +115,40 @@ export default function ChannelPage() {
   return (
     <div class="flex flex-col h-full">
       {/* Header */}
-      <div class="border-b border-gray-200 p-4">
+      <div class="border-b border-gray-200 p-4 bg-white">
         <Suspense
-          fallback={<div class="text-lg font-semibold">Loading...</div>}
+          fallback={<div class="text-lg font-semibold text-gray-900">Loading...</div>}
         >
-          <Show when={channel()}>
-            <h2 class="text-lg font-semibold"># {channel().name}</h2>
+          <Show when={!channel.loading}>
+            <h2 class="text-lg font-semibold text-gray-900"># {channel.data?.[0]?.name}</h2>
           </Show>
         </Suspense>
       </div>
 
       {/* Messages */}
-      <div class="flex-1 overflow-y-auto p-4 space-y-2">
+      <div class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50">
         <Suspense
           fallback={
             <div class="text-sm text-gray-500">Loading messages...</div>
           }
         >
-          <Show when={messages()}>
-            <For each={messages()}>
-              {(message: any) => (
+          <Show when={!messages.loading}>
+            <For each={messages.data}>
+              {(message) => (
                 <div class="flex gap-3">
-                  <div class="shrink-0 w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-xs font-semibold">
+                  <div class="shrink-0 w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-xs font-semibold text-gray-700">
                     {message.author_name?.[0]?.toUpperCase() || "?"}
                   </div>
                   <div class="flex-1">
                     <div class="flex items-baseline gap-2">
-                      <span class="font-semibold text-sm">
+                      <span class="font-semibold text-sm text-gray-900">
                         {message.author_name || "Unknown"}
                       </span>
                       <span class="text-xs text-gray-500">
                         {new Date(message.created_at).toLocaleTimeString()}
                       </span>
                     </div>
-                    <div class="text-sm mt-1">{message.content}</div>
+                    <div class="text-sm mt-1 text-gray-900">{message.content}</div>
                   </div>
                 </div>
               )}
@@ -160,7 +159,7 @@ export default function ChannelPage() {
       </div>
 
       {/* Input */}
-      <div class="border-t border-gray-200 p-4">
+      <div class="border-t border-gray-200 p-4 bg-white">
         <div class="flex gap-2">
           <input
             type="text"
@@ -173,9 +172,9 @@ export default function ChannelPage() {
               }
             }}
             placeholder={`Message #${
-              channel()?.name || "channel"
+              channel.data?.[0]?.name || "channel"
             }... (use @agent to mention)`}
-            class="flex-1 px-4 py-2 border border-gray-300 rounded"
+            class="flex-1 px-4 py-2 border border-gray-300 rounded text-gray-900 placeholder-gray-400 bg-white"
             disabled={sending()}
           />
           <button
@@ -186,11 +185,9 @@ export default function ChannelPage() {
             {sending() ? "Sending..." : "Send"}
           </button>
         </div>
-        <div class="text-xs text-gray-500 mt-2">
+        <div class="text-xs text-gray-600 mt-2">
           Available agents:{" "}
-          {agents()
-            ?.map((a: any) => `@${a.name}`)
-            .join(", ") || "none"}
+          {agents.data?.map((a) => `@${a.name}`).join(", ") || "none"}
         </div>
       </div>
     </div>

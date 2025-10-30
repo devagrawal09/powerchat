@@ -72,7 +72,7 @@ export async function uploadData(transactions: CrudEntry[]) {
     }
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Upload error:", error);
     throw error; // Let PowerSync retry
   }
