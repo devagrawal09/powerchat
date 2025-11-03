@@ -2,6 +2,7 @@ import { For, Show, Suspense, createSignal, JSX } from "solid-js";
 import { A } from "@solidjs/router";
 import { useWatchedQuery } from "~/lib/useWatchedQuery";
 import { writeTransaction } from "~/lib/powersync";
+import { getUserId } from "~/lib/getUserId";
 
 type ChannelRow = {
   id: string;
@@ -32,9 +33,7 @@ export default function ChatLayout(props: { children?: JSX.Element }) {
     setCreating(true);
     try {
       const channelId = crypto.randomUUID();
-      const userId = localStorage.getItem("pc_uid") || crypto.randomUUID();
-      if (!localStorage.getItem("pc_uid"))
-        localStorage.setItem("pc_uid", userId);
+      const userId = getUserId();
 
       await writeTransaction(async (tx) => {
         // Ensure user exists first
@@ -59,6 +58,16 @@ export default function ChatLayout(props: { children?: JSX.Element }) {
         await tx.execute(
           `INSERT INTO channel_members (id, channel_id, member_type, member_id, joined_at) VALUES (?, ?, 'user', ?, datetime('now'))`,
           [crypto.randomUUID(), channelId, userId]
+        );
+
+        // Auto-add default assistant agent
+        await tx.execute(
+          `INSERT INTO channel_members (id, channel_id, member_type, member_id, joined_at) VALUES (?, ?, 'agent', ?, datetime('now'))`,
+          [
+            crypto.randomUUID(),
+            channelId,
+            "00000000-0000-0000-0000-000000000001",
+          ]
         );
       });
 
@@ -89,13 +98,32 @@ export default function ChatLayout(props: { children?: JSX.Element }) {
             <Show when={!channels.loading}>
               <For each={channels.data}>
                 {(channel) => (
-                  <A
-                    href={`/channel/${channel.id}`}
-                    class="block px-2 py-1.5 rounded hover:bg-gray-100 text-sm text-gray-900"
-                    activeClass="bg-blue-50 text-blue-600"
-                  >
-                    # {channel.name}
-                  </A>
+                  <div class="flex items-center group">
+                    <A
+                      href={`/channel/${channel.id}`}
+                      class="flex-1 px-2 py-1.5 rounded hover:bg-gray-100 text-sm text-gray-900"
+                      activeClass="bg-blue-50 text-blue-600"
+                    >
+                      # {channel.name}
+                    </A>
+                    <button
+                      type="button"
+                      class="ml-2 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        await writeTransaction(async (tx) => {
+                          await tx.execute(
+                            "DELETE FROM channels WHERE id = ?",
+                            [channel.id]
+                          );
+                        });
+                      }}
+                      aria-label="Delete channel"
+                    >
+                      ×
+                    </button>
+                  </div>
                 )}
               </For>
             </Show>

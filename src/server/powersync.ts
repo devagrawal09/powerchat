@@ -31,10 +31,17 @@ export async function getPowerSyncToken() {
 
 // Upload data from PowerSync client to Neon
 export async function uploadData(transactions: CrudEntry[]) {
+  console.log("[PowerSync] [SERVER] uploadData called with", transactions);
   try {
     // Process synchronously - DO NOT queue for later per PowerSync docs
     for (const op of transactions) {
       const { op: opType, table: tableName, id, opData } = op;
+      console.log(`[PowerSync] [SERVER] Processing`, {
+        opType,
+        tableName,
+        id,
+        opData,
+      });
 
       switch (opType) {
         case UpdateType.PUT:

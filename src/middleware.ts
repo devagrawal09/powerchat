@@ -6,7 +6,7 @@ function ensureAnonymousUser(event: any) {
   if (!existing) {
     const uid = crypto.randomUUID();
     setCookie(event.nativeEvent, "pc_uid", uid, {
-      httpOnly: true,
+      httpOnly: false,
       sameSite: "lax",
       path: "/",
       maxAge: 60 * 60 * 24 * 365, // 12 months

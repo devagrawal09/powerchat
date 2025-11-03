@@ -27,13 +27,19 @@ class PowerChatConnector implements PowerSyncBackendConnector {
     if (!transaction) return;
 
     try {
+      // Log upload attempt
+      console.log("[PowerSync] Calling uploadToServer with", transaction.crud);
       // Call server function directly - no HTTP overhead!
       await uploadToServer(transaction.crud);
+      // Log success
+      console.log("[PowerSync] uploadToServer success");
 
       // Mark as complete only after successful write
       await transaction.complete();
+      // Log transaction completion
+      console.log("[PowerSync] transaction marked as complete");
     } catch (error) {
-      console.error("Upload failed:", error);
+      console.error("[PowerSync] Upload failed:", error);
       throw error; // PowerSync will retry
     }
   }
@@ -93,7 +99,7 @@ const schema = new Schema({
 
 let db: PowerSyncDatabase | null = null;
 
-export async function getPowerSync(): Promise<PowerSyncDatabase> {
+export function getPowerSync(): PowerSyncDatabase {
   if (!db) {
     db = new PowerSyncDatabase({
       schema,
@@ -104,7 +110,10 @@ export async function getPowerSync(): Promise<PowerSyncDatabase> {
 
     // Connect to PowerSync Service
     const connector = new PowerChatConnector();
-    await db.connect(connector);
+    db.connect(connector).catch((error) => {
+      console.error("Failed to connect to PowerSync:", error);
+      throw error;
+    });
   }
   return db;
 }
