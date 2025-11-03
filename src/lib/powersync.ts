@@ -2,6 +2,8 @@ import {
   PowerSyncDatabase,
   AbstractPowerSyncDatabase,
   PowerSyncBackendConnector,
+  createBaseLogger,
+  LogLevel,
 } from "@powersync/web";
 import { column, Schema, Table } from "@powersync/web";
 import { Transaction } from "@powersync/common";
@@ -15,32 +17,33 @@ class PowerChatConnector implements PowerSyncBackendConnector {
   async fetchCredentials() {
     // Call server function directly - no HTTP overhead!
     const { token, expiresAt } = await getPowerSyncToken();
-    return {
-      endpoint: import.meta.env.VITE_POWERSYNC_SERVICE_URL,
-      token,
-      expiresAt: new Date(expiresAt),
-    };
+    const endpoint = import.meta.env.VITE_POWERSYNC_SERVICE_URL;
+    return { endpoint, token, expiresAt: new Date(expiresAt) };
   }
 
   async uploadData(database: AbstractPowerSyncDatabase): Promise<void> {
-    const transaction = await database.getNextCrudTransaction();
-    if (!transaction) return;
+    // Process all pending transactions in a loop
+    while (true) {
+      const transaction = await database.getNextCrudTransaction();
+      if (!transaction) {
+        break;
+      }
 
-    try {
-      // Log upload attempt
-      console.log("[PowerSync] Calling uploadToServer with", transaction.crud);
-      // Call server function directly - no HTTP overhead!
-      await uploadToServer(transaction.crud);
-      // Log success
-      console.log("[PowerSync] uploadToServer success");
-
-      // Mark as complete only after successful write
-      await transaction.complete();
-      // Log transaction completion
-      console.log("[PowerSync] transaction marked as complete");
-    } catch (error) {
-      console.error("[PowerSync] Upload failed:", error);
-      throw error; // PowerSync will retry
+      try {
+        // Call server function directly - no HTTP overhead!
+        await uploadToServer(
+          transaction.crud.map((op) => ({
+            op: op.op,
+            table: op.table,
+            id: op.id,
+            opData: op.opData ?? {},
+          }))
+        );
+        // Mark as complete only after successful write
+        await transaction.complete();
+      } catch (error) {
+        throw error; // PowerSync will retry
+      }
     }
   }
 }
@@ -51,6 +54,7 @@ const schema = new Schema({
     id: column.text,
     display_name: column.text,
     created_at: column.text,
+    claimed_at: column.text,
   }),
   agents: new Table({
     id: column.text,
@@ -99,7 +103,10 @@ const schema = new Schema({
 
 let db: PowerSyncDatabase | null = null;
 
-export function getPowerSync(): PowerSyncDatabase {
+const logger = createBaseLogger();
+logger.setLevel(LogLevel.DEBUG);
+
+export async function getPowerSync() {
   if (!db) {
     db = new PowerSyncDatabase({
       schema,
@@ -110,10 +117,8 @@ export function getPowerSync(): PowerSyncDatabase {
 
     // Connect to PowerSync Service
     const connector = new PowerChatConnector();
-    db.connect(connector).catch((error) => {
-      console.error("Failed to connect to PowerSync:", error);
-      throw error;
-    });
+    await db.connect(connector);
+    await db.waitForReady();
   }
   return db;
 }
