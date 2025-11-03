@@ -46,14 +46,6 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Mentions of agents in a message
-CREATE TABLE IF NOT EXISTS message_mentions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-  agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-  UNIQUE (message_id, agent_id)
-);
-
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_channel_members_member ON channel_members (member_type, member_id);
 CREATE INDEX IF NOT EXISTS idx_messages_channel_time ON messages (channel_id, created_at, id);

@@ -38,17 +38,12 @@ export async function uploadData(
     opData: Record<string, any>;
   }[]
 ) {
-  console.log("[PowerSync] [SERVER] uploadData called with", transactions);
+  console.log("[uploadData] transactions", transactions.length);
+
   try {
     // Process synchronously - DO NOT queue for later per PowerSync docs
     for (const op of transactions) {
       const { op: opType, table: tableName, id, opData } = op;
-      console.log(`[PowerSync] [SERVER] Processing`, {
-        opType,
-        tableName,
-        id,
-        opData,
-      });
 
       switch (opType) {
         case UpdateType.PUT:
@@ -72,6 +67,7 @@ export async function uploadData(
           // Filter out 'id' from opData since it's already provided separately
           const patchCols = Object.keys(opData).filter((k) => k !== "id");
           const patchVals = patchCols.map((k) => opData[k]);
+          if (!patchCols.length) break;
           await query(
             `UPDATE ${tableName} 
              SET ${patchCols.map((k, i) => `${k} = $${i + 1}`).join(", ")}
@@ -88,8 +84,9 @@ export async function uploadData(
     }
 
     return { success: true };
-  } catch (error: unknown) {
-    console.error("Upload error:", error);
-    throw error; // Let PowerSync retry
+  } catch (error: any) {
+    console.error("[uploadData] error:", error);
+    // Return error as part of response instead of throwing
+    return { success: false, error: error.message };
   }
 }

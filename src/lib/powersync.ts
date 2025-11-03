@@ -22,6 +22,7 @@ class PowerChatConnector implements PowerSyncBackendConnector {
   }
 
   async uploadData(database: AbstractPowerSyncDatabase): Promise<void> {
+    console.log("[uploadData] uploadData");
     // Process all pending transactions in a loop
     while (true) {
       const transaction = await database.getNextCrudTransaction();
@@ -31,7 +32,7 @@ class PowerChatConnector implements PowerSyncBackendConnector {
 
       try {
         // Call server function directly - no HTTP overhead!
-        await uploadToServer(
+        const result = await uploadToServer(
           transaction.crud.map((op) => ({
             op: op.op,
             table: op.table,
@@ -39,9 +40,16 @@ class PowerChatConnector implements PowerSyncBackendConnector {
             opData: op.opData ?? {},
           }))
         );
+
+        // Check if upload was successful
+        if (!result.success) {
+          throw new Error(result.error || "Upload failed");
+        }
+
         // Mark as complete only after successful write
         await transaction.complete();
       } catch (error) {
+        console.error("[PowerSync] Upload failed:", error);
         throw error; // PowerSync will retry
       }
     }
@@ -94,11 +102,6 @@ const schema = new Schema({
       },
     }
   ),
-  message_mentions: new Table({
-    id: column.text,
-    message_id: column.text,
-    agent_id: column.text,
-  }),
 });
 
 let db: PowerSyncDatabase | null = null;

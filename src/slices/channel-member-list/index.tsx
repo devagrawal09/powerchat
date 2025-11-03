@@ -35,11 +35,6 @@ export function ChannelMemberList(props: ChannelMemberListProps) {
     () => [props.channelId]
   );
 
-  createEffect(() => {
-    console.log("[members] users", JSON.stringify(users.data, null, 2));
-    console.log("[members] agents", JSON.stringify(agents.data, null, 2));
-  });
-
   return (
     <aside class="w-64 border-l border-gray-200 bg-white p-4 overflow-y-auto">
       <h3 class="text-sm font-semibold text-gray-700 mb-3">Members</h3>
@@ -63,9 +58,6 @@ export function ChannelMemberList(props: ChannelMemberListProps) {
       <Show when={!agents.loading}>
         <For each={agents.data}>
           {(member) => {
-            createEffect(() => {
-              console.log("[members] agent", JSON.stringify(member, null, 2));
-            });
             return (
               <div class="text-sm text-gray-900 py-1">
                 {member.name ||

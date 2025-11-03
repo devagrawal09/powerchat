@@ -1,7 +1,6 @@
 import { JSX } from "solid-js";
 import { ChannelList } from "~/slices/channel-list";
 import { CreateChannel } from "~/slices/create-channel";
-import { DevDbInspector } from "~/slices/dev-db-inspector";
 
 export default function ChatLayout(props: { children?: JSX.Element }) {
   return (
@@ -17,10 +16,7 @@ export default function ChatLayout(props: { children?: JSX.Element }) {
       </div>
 
       {/* Main content */}
-      <div class="flex-1 flex flex-col">
-        {props.children}
-        <DevDbInspector />
-      </div>
+      <div class="flex-1 flex flex-col">{props.children}</div>
     </div>
   );
 }

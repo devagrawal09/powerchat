@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@mastra/core": "^0.23.1",
+    "@mastra/mcp": "^0.14.1",
     "@powersync/common": "^1.40.0",
     "@powersync/web": "^1.27.1",
     "@solidjs/router": "^0.15.0",
