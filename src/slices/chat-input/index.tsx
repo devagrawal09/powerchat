@@ -23,7 +23,6 @@ type ChatInputProps = {
 
 export function ChatInput(props: ChatInputProps) {
   const [content, setContent] = createSignal("");
-  const [sending, setSending] = createSignal(false);
   const [mentionOpen, setMentionOpen] = createSignal(false);
   const [mentionQuery, setMentionQuery] = createSignal("");
   const [activeIndex, setActiveIndex] = createSignal(0);
@@ -106,8 +105,8 @@ export function ChatInput(props: ChatInputProps) {
   const handleSend = async () => {
     const text = content().trim();
     if (!text) return;
+    setContent("");
 
-    setSending(true);
     try {
       const messageId = crypto.randomUUID();
       const userId = getUserId();
@@ -168,7 +167,7 @@ export function ChatInput(props: ChatInputProps) {
         const agentMessageId = crypto.randomUUID();
         const agentMessageCreatedAt = new Date().toISOString();
 
-        // Insert placeholder
+        // Insert placeholder (shows while agent is thinking)
         await writeTransaction(async (tx) => {
           await tx.execute(
             `INSERT INTO messages (id, channel_id, author_type, author_id, content, created_at)
@@ -177,7 +176,7 @@ export function ChatInput(props: ChatInputProps) {
               agentMessageId,
               props.channelId,
               agentId,
-              "",
+              "Thinking...",
               agentMessageCreatedAt,
             ]
           );
@@ -212,12 +211,8 @@ export function ChatInput(props: ChatInputProps) {
 
         console.log("[send] agent stream complete");
       }
-
-      setContent("");
     } catch (error) {
       console.error("Failed to send message:", error);
-    } finally {
-      setSending(false);
     }
   };
 
@@ -271,7 +266,6 @@ export function ChatInput(props: ChatInputProps) {
             }}
             placeholder={`Message #${channel.data?.[0]?.name ?? "channel"}...`}
             class="w-full px-4 py-2 border border-gray-300 rounded text-gray-900 placeholder-gray-400 bg-white"
-            disabled={sending()}
           />
           <Show when={mentionOpen() && mentionOptions().length > 0}>
             <div class="absolute bottom-full left-0 right-0 mb-2 max-h-56 overflow-auto bg-white border border-gray-200 rounded shadow z-50">
@@ -300,10 +294,10 @@ export function ChatInput(props: ChatInputProps) {
         </div>
         <button
           onClick={handleSend}
-          disabled={sending() || !content().trim()}
+          disabled={!content().trim()}
           class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {sending() ? "Sending..." : "Send"}
+          Send
         </button>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { For, Show } from "solid-js";
 import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { RenderMarkdown } from "~/components/Markdown";
 
 type MessageRow = {
   id: string;
@@ -54,7 +55,9 @@ export function ChatMessages(props: ChatMessagesProps) {
                     {new Date(message.created_at).toLocaleTimeString()}
                   </span>
                 </div>
-                <div class="text-sm mt-1 text-gray-900">{message.content}</div>
+                <div class="text-sm mt-1 text-gray-900">
+                  <RenderMarkdown>{message.content}</RenderMarkdown>
+                </div>
               </div>
             </div>
           )}

@@ -68,7 +68,6 @@ export function ChannelMemberList(props: ChannelMemberListProps) {
             });
             return (
               <div class="text-sm text-gray-900 py-1">
-                @
                 {member.name ||
                   (member.member_id === "00000000-0000-0000-0000-000000000001"
                     ? "assistant"

@@ -1,6 +1,5 @@
 "use server";
 import { Agent } from "@mastra/core/agent";
-import type { MessageListInput } from "@mastra/core/agent/message-list";
 
 // Create Mastra agent
 const agent = new Agent({
