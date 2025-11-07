@@ -2,7 +2,7 @@ import { createSignal, Show } from "solid-js";
 import { useAction, useSubmission } from "@solidjs/router";
 import { registerUsername } from "~/server/actions";
 
-export function UsernameModal(props: {
+export function UsernameRegistration(props: {
   onSuccess: (username: string) => void;
 }) {
   const [username, setUsername] = createSignal("");
@@ -38,7 +38,7 @@ export function UsernameModal(props: {
       formData.append("username", value);
       const result = await register(formData);
 
-      console.log("[UsernameModal] Result:", result);
+      console.log("[UsernameRegistration] Result:", result);
 
       if (!result) {
         setError("No response from server");
@@ -57,7 +57,7 @@ export function UsernameModal(props: {
         setError("Unexpected response from server");
       }
     } catch (err: any) {
-      console.error("[UsernameModal] Error:", err);
+      console.error("[UsernameRegistration] Error:", err);
       setError(err?.message || "Failed to register username");
     }
   };

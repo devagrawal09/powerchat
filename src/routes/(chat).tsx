@@ -1,27 +1,20 @@
-import { JSX, createSignal, onMount, Show } from "solid-js";
+import { JSX, Show } from "solid-js";
 import { ChannelList } from "~/slices/channel-list";
 import { CreateChannel } from "~/slices/create-channel";
-import { UsernameModal } from "~/components/UsernameModal";
-import { getUsername } from "~/lib/getUsername";
+import { UsernameCheck } from "~/slices/username-check";
+import { UsernameRegistration } from "~/slices/username-registration";
 
 export default function ChatLayout(props: { children?: JSX.Element }) {
-  const [hasUsername, setHasUsername] = createSignal(false);
-  const [checking, setChecking] = createSignal(true);
-
-  onMount(() => {
-    const username = getUsername();
-    setHasUsername(!!username);
-    setChecking(false);
-  });
+  const usernameCheck = UsernameCheck();
 
   const handleUsernameSet = (username: string) => {
-    setHasUsername(true);
+    // Cookie is set by mutation slice, query slice will detect it
   };
 
   return (
     <>
-      <Show when={!checking() && !hasUsername()}>
-        <UsernameModal onSuccess={handleUsernameSet} />
+      <Show when={!usernameCheck.checking() && !usernameCheck.hasUsername()}>
+        <UsernameRegistration onSuccess={handleUsernameSet} />
       </Show>
 
       <div class="flex h-screen bg-gray-50">
