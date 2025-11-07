@@ -60,9 +60,7 @@ class PowerChatConnector implements PowerSyncBackendConnector {
 const schema = new Schema({
   users: new Table({
     id: column.text,
-    display_name: column.text,
     created_at: column.text,
-    claimed_at: column.text,
   }),
   agents: new Table({
     id: column.text,

@@ -1,12 +1,11 @@
 -- PowerChat Database Schema
--- Creates tables for users, agents, channels, memberships, messages, and mentions
+-- Creates tables for users, agents, channels, memberships, messages
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- Users (anonymous UUIDs)
+-- Users (username-based authentication)
 CREATE TABLE IF NOT EXISTS users (
-  id UUID PRIMARY KEY,
-  display_name TEXT NOT NULL DEFAULT 'Anonymous',
+  id TEXT PRIMARY KEY,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -22,7 +21,7 @@ CREATE TABLE IF NOT EXISTS agents (
 CREATE TABLE IF NOT EXISTS channels (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT UNIQUE NOT NULL,
-  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -31,7 +30,7 @@ CREATE TABLE IF NOT EXISTS channel_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
   member_type TEXT NOT NULL CHECK (member_type IN ('user','agent')),
-  member_id UUID NOT NULL,
+  member_id TEXT NOT NULL,
   joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (channel_id, member_type, member_id)
 );
@@ -41,7 +40,7 @@ CREATE TABLE IF NOT EXISTS messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
   author_type TEXT NOT NULL CHECK (author_type IN ('user','agent')),
-  author_id UUID NOT NULL,
+  author_id TEXT NOT NULL,
   content TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -50,4 +49,3 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_channel_members_member ON channel_members (member_type, member_id);
 CREATE INDEX IF NOT EXISTS idx_messages_channel_time ON messages (channel_id, created_at, id);
 CREATE INDEX IF NOT EXISTS idx_messages_author ON messages (author_type, author_id);
-

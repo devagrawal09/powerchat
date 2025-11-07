@@ -1,68 +1,124 @@
 import { action } from "@solidjs/router";
-import { query } from "./db";
-import { getCookie } from "vinxi/http";
+import { query, getOne } from "./db";
+import { getCookie, setCookie } from "vinxi/http";
 import { getRequestEvent } from "solid-js/web";
 
-function getUserId(): string {
+function getUsername(): string {
   const event = getRequestEvent();
   if (!event) throw new Error("No request event");
-  const userId = getCookie(event.nativeEvent, "pc_uid");
-  if (!userId) throw new Error("No session");
-  return userId;
+  const username = getCookie(event.nativeEvent, "pc_username");
+  if (!username) throw new Error("No session");
+  return username;
 }
+
+export const registerUsername = action(async (formData: FormData) => {
+  "use server";
+  const username = ((formData.get("username") as string) || "").trim();
+
+  // Validate username format
+  if (username.length < 3 || username.length > 30) {
+    return { error: "Username must be 3-30 characters" };
+  }
+
+  if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
+    return {
+      error:
+        "Username can only contain letters, numbers, hyphens, and underscores",
+    };
+  }
+
+  // Check for duplicates
+  const existing = await getOne<{ id: string }>(
+    `SELECT id FROM users WHERE id = $1`,
+    [username]
+  );
+
+  if (existing) {
+    return { error: "Username already taken" };
+  }
+
+  // Insert new user
+  try {
+    await query(`INSERT INTO users (id, created_at) VALUES ($1, now())`, [
+      username,
+    ]);
+
+    // Set cookie in response
+    const event = getRequestEvent();
+    if (event) {
+      setCookie(event.nativeEvent, "pc_username", username, {
+        httpOnly: false,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 365, // 12 months
+      });
+    }
+
+    return { success: true, username };
+  } catch (error: any) {
+    return { error: error.message || "Failed to create user" };
+  }
+}, "registerUsername");
 
 export const createChannel = action(async (formData: FormData) => {
   "use server";
-  const userId = getUserId();
+  const username = getUsername();
   const name = formData.get("name") as string;
 
   if (!name || name.length < 2) {
     return { error: "Channel name must be at least 2 characters" };
   }
 
-  // Ensure user exists
-  await query(
-    `INSERT INTO users (id, display_name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING`,
-    [userId, "Anonymous"]
-  );
-
   // Create channel
   const channelResult = await query(
     `INSERT INTO channels (name, created_by) VALUES ($1, $2) RETURNING id`,
-    [name, userId]
+    [name, username]
   );
   const channelId = channelResult.rows[0].id;
 
   // Add creator as member
   await query(
     `INSERT INTO channel_members (channel_id, member_type, member_id) VALUES ($1, 'user', $2)`,
-    [channelId, userId]
+    [channelId, username]
   );
 
   return { success: true, channelId };
 }, "createChannel");
 
-export const inviteMember = action(async (formData: FormData) => {
+export const inviteByUsername = action(async (formData: FormData) => {
   "use server";
   const channelId = formData.get("channelId") as string;
-  const memberType = formData.get("memberType") as string;
-  const memberId = formData.get("memberId") as string;
+  const username = ((formData.get("username") as string) || "").trim();
 
-  if (!channelId || !memberType || !memberId) {
+  if (!channelId || !username) {
     return { error: "Missing required fields" };
   }
 
-  await query(
-    `INSERT INTO channel_members (channel_id, member_type, member_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-    [channelId, memberType, memberId]
+  // Check if user exists
+  const userExists = await getOne<{ id: string }>(
+    `SELECT id FROM users WHERE id = $1`,
+    [username]
   );
 
-  return { success: true };
-}, "inviteMember");
+  if (!userExists) {
+    return { error: "User not found" };
+  }
+
+  // Add user to channel
+  try {
+    await query(
+      `INSERT INTO channel_members (channel_id, member_type, member_id) VALUES ($1, 'user', $2) ON CONFLICT DO NOTHING`,
+      [channelId, username]
+    );
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message || "Failed to add user to channel" };
+  }
+}, "inviteByUsername");
 
 export const postMessage = action(async (formData: FormData) => {
   "use server";
-  const userId = getUserId();
+  const username = getUsername();
   const channelId = formData.get("channelId") as string;
   const content = formData.get("content") as string;
 
@@ -70,16 +126,10 @@ export const postMessage = action(async (formData: FormData) => {
     return { error: "Missing required fields" };
   }
 
-  // Ensure user exists
-  await query(
-    `INSERT INTO users (id, display_name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING`,
-    [userId, "Anonymous"]
-  );
-
   // Insert message
   const messageResult = await query(
     `INSERT INTO messages (channel_id, author_type, author_id, content) VALUES ($1, 'user', $2, $3) RETURNING id`,
-    [channelId, userId, content]
+    [channelId, username, content]
   );
   const messageId = messageResult.rows[0].id;
 

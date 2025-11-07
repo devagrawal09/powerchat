@@ -1,7 +1,7 @@
 import { createSignal, createMemo, For, Show } from "solid-js";
 import { writeTransaction } from "~/lib/powersync";
 import { processAgentResponse } from "~/server/agent";
-import { getUserId } from "~/lib/getUserId";
+import { getUsername } from "~/lib/getUsername";
 import { useWatchedQuery } from "~/lib/useWatchedQuery";
 
 type MemberRow = {
@@ -43,7 +43,7 @@ export function ChatInput(props: ChatInputProps) {
   const members = useWatchedQuery<MemberRow>(
     () =>
       `SELECT cm.member_type, cm.member_id,
-              COALESCE(u.display_name, a.name) AS name
+              COALESCE(u.id, a.name) AS name
        FROM channel_members cm
        LEFT JOIN users u ON cm.member_type = 'user' AND u.id = cm.member_id
        LEFT JOIN agents a ON cm.member_type = 'agent' AND a.id = cm.member_id
@@ -116,12 +116,17 @@ export function ChatInput(props: ChatInputProps) {
 
     try {
       const messageId = crypto.randomUUID();
-      const userId = getUserId();
+      const username = getUsername();
       const userMessageCreatedAt = new Date().toISOString();
 
+      if (!username) {
+        console.error("[send] No username found");
+        return;
+      }
+
       console.log(
-        "[send] userId",
-        userId,
+        "[send] username",
+        username,
         "messageId",
         messageId,
         "text",
@@ -133,7 +138,7 @@ export function ChatInput(props: ChatInputProps) {
         await tx.execute(
           `INSERT INTO messages (id, channel_id, author_type, author_id, content, created_at)
            VALUES (?, ?, 'user', ?, ?, ?)`,
-          [messageId, props.channelId, userId, text, userMessageCreatedAt]
+          [messageId, props.channelId, username, text, userMessageCreatedAt]
         );
       });
 

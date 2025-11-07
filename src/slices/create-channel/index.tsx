@@ -1,6 +1,6 @@
 import { createSignal } from "solid-js";
 import { writeTransaction } from "~/lib/powersync";
-import { getUserId } from "~/lib/getUserId";
+import { getUsername } from "~/lib/getUsername";
 
 export function CreateChannel() {
   const [creating, setCreating] = createSignal(false);
@@ -16,31 +16,25 @@ export function CreateChannel() {
     setCreating(true);
     try {
       const channelId = crypto.randomUUID();
-      const userId = getUserId();
+      const username = getUsername();
+
+      if (!username) {
+        console.error("No username found");
+        setCreating(false);
+        return;
+      }
 
       await writeTransaction(async (tx) => {
-        // Ensure user exists
-        const existingUser = await tx.execute(
-          `SELECT id FROM users WHERE id = ?`,
-          [userId]
-        );
-        if (!existingUser.rows?._array?.length) {
-          await tx.execute(
-            `INSERT INTO users (id, display_name, created_at) VALUES (?, ?, datetime('now'))`,
-            [userId, "Anonymous"]
-          );
-        }
-
         // Insert channel
         await tx.execute(
           `INSERT INTO channels (id, name, created_by, created_at) VALUES (?, ?, ?, datetime('now'))`,
-          [channelId, name, userId]
+          [channelId, name, username]
         );
 
         // Add user as member
         await tx.execute(
           `INSERT INTO channel_members (id, channel_id, member_type, member_id, joined_at) VALUES (?, ?, 'user', ?, datetime('now'))`,
-          [crypto.randomUUID(), channelId, userId]
+          [crypto.randomUUID(), channelId, username]
         );
 
         // Auto-add assistant agent

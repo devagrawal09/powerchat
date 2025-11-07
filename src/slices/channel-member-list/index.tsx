@@ -1,4 +1,4 @@
-import { For, Show, createEffect } from "solid-js";
+import { For, Show } from "solid-js";
 import { useWatchedQuery } from "~/lib/useWatchedQuery";
 
 type MemberRow = {
@@ -15,7 +15,7 @@ export function ChannelMemberList(props: ChannelMemberListProps) {
   // Users in channel
   const users = useWatchedQuery<MemberRow>(
     () =>
-      `SELECT 'user' as member_type, u.id as member_id, COALESCE(u.display_name, 'Anonymous') as name
+      `SELECT 'user' as member_type, u.id as member_id, u.id as name
        FROM channel_members cm
        JOIN users u ON cm.member_type = 'user' AND u.id = cm.member_id
        WHERE cm.channel_id = ?
@@ -45,9 +45,7 @@ export function ChannelMemberList(props: ChannelMemberListProps) {
       <Show when={!users.loading}>
         <For each={users.data}>
           {(member) => (
-            <div class="text-sm text-gray-900 py-1">
-              {member.name || "Anonymous"}
-            </div>
+            <div class="text-sm text-gray-900 py-1">{member.name}</div>
           )}
         </For>
       </Show>

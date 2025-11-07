@@ -6,25 +6,38 @@ import { getRequestEvent } from "solid-js/web";
 import { query } from "./db";
 import { UpdateType } from "@powersync/common";
 
+// Helper to decode Base64URL safely
+function base64urlToBytes(b64url: string): Uint8Array {
+  const b64 = b64url
+    .replace(/-/g, "+")
+    .replace(/_/g, "/")
+    .padEnd(Math.ceil(b64url.length / 4) * 4, "=");
+  return new Uint8Array(Buffer.from(b64, "base64"));
+}
+
 // Token generation for PowerSync authentication
 export async function getPowerSyncToken() {
   const event = getRequestEvent();
   if (!event) throw new Error("No request event");
 
-  const userId = getCookie(event.nativeEvent, "pc_uid");
-  if (!userId) throw new Error("No session");
+  const username = getCookie(event.nativeEvent, "pc_username");
+  if (!username) throw new Error("No session");
 
-  const secret = process.env.POWERSYNC_JWT_SECRET;
-  if (!secret) throw new Error("POWERSYNC_JWT_SECRET is not set");
+  const kid = process.env.POWERSYNC_JWT_KID;
+  const secretB64url = process.env.POWERSYNC_JWT_SECRET;
+  if (!kid || !secretB64url)
+    throw new Error("POWERSYNC_JWT_KID or POWERSYNC_JWT_SECRET not set");
 
-  const jwt = await new SignJWT({ sub: userId })
-    .setProtectedHeader({ alg: "HS256", kid: "powerchat" })
+  const key = base64urlToBytes(secretB64url);
+
+  const jwt = await new SignJWT({ sub: username })
+    .setProtectedHeader({ alg: "HS256", kid })
     .setIssuedAt()
     .setExpirationTime("15m")
-    .sign(new TextEncoder().encode(secret));
+    .sign(key);
 
   return {
-    token: `eyJhbGciOiJSUzI1NiIsImtpZCI6InBvd2Vyc3luYy1kZXYtMzIyM2Q0ZTMifQ.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDIiLCJpYXQiOjE3NjIxNTQ1NzAsImlzcyI6Imh0dHBzOi8vcG93ZXJzeW5jLWFwaS5qb3VybmV5YXBwcy5jb20iLCJhdWQiOiJodHRwczovLzY5MDBhOWM0OTZhMmZmNGZkOTg4OWQ2OC5wb3dlcnN5bmMuam91cm5leWFwcHMuY29tIiwiZXhwIjoxNzYyMTk3NzcwfQ.ebur__vuNjkIdTKNgriPMJ9aAi7xZnEBwimd_dWvONEaWcdG9mAUTdsSqnUPWdXBrmEKHDgk4Aj8ZJgMKxStRwTBOHLx0tBNwc_XpUuChYa9REuMmXLs0YGvNh8P14ZDtfZUalmMq8c204szornwvAkZNXtE-32RempHIiq0APm8HHEp5retXV3H2HFIgydRGL2FVP9v_C1XcIUgj0I4apzxPFKAKlu0xcitoOkF5lRAAYYh_kmxMi3CvbgBx-zn50M3s6Z6Q2fC2Rgsfl8HeQX2Gem_5_BMCEfF2ZUl72_zda-enN-1JHP45KcqBqfrWfisRxygHw_6hBm-PUdEBQ`,
+    token: jwt,
     expiresAt: Date.now() + 15 * 60 * 1000,
   };
 }
