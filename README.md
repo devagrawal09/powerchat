@@ -81,6 +81,103 @@ Visit `http://localhost:3000`
 
 ## Architecture
 
+### Vertical Slice Architecture
+
+PowerChat uses **vertical slice architecture** to organize features by domain rather than by technical layer. Each feature is a self-contained "slice" that includes all the code needed for that feature.
+
+#### Slice Structure
+
+Every slice lives in `src/slices/{feature-name}/` and contains:
+
+- `index.tsx` - The component/hook implementation
+- `spec.md` - Specification document (see Spec-Driven Development below)
+
+#### Query vs Mutation Slices
+
+Slices are categorized by their primary responsibility:
+
+**Query Slices** (read-only):
+
+- Fetch and display data
+- Use PowerSync `useWatchedQuery` for reactive data
+- Examples: `channel-list`, `chat-messages`, `username-check`, `channel-header`
+
+**Mutation Slices** (write operations):
+
+- Handle user actions that modify data
+- Use PowerSync `writeTransaction` or server actions
+- Examples: `create-channel`, `chat-input`, `username-registration`
+
+**Key Principle**: Each slice is **either a query OR a mutation**, never both. This ensures clear separation of concerns.
+
+#### Slice Independence
+
+Slices are **completely independent** - they never import or depend on other slices. This means:
+
+- Slices can be developed, tested, and refactored in isolation
+- No circular dependencies between features
+- Easy to understand what each slice does without reading other code
+- Route components orchestrate multiple slices together
+
+#### Route Components Orchestrate Slices
+
+Route components (`src/routes/`) compose multiple slices together:
+
+```tsx
+// Example: src/routes/(chat).tsx
+import { UsernameCheck } from "~/slices/username-check";
+import { UsernameRegistration } from "~/slices/username-registration";
+import { ChannelList } from "~/slices/channel-list";
+
+export default function ChatLayout() {
+  const usernameCheck = UsernameCheck(); // Query slice
+  // ... conditionally render UsernameRegistration based on query state
+  // ... render ChannelList and other slices
+}
+```
+
+### Spec-Driven Development
+
+Every slice follows a **spec-driven development** approach:
+
+1. **Write the spec first** (`spec.md`) - Document the feature's purpose, data flow, UI, and behavior
+2. **Implement the slice** (`index.tsx`) - Build the component/hook according to the spec
+3. **Spec as documentation** - The spec serves as living documentation for the feature
+
+#### Spec Structure
+
+Each `spec.md` follows a consistent format:
+
+```markdown
+# Feature Name
+
+## Purpose
+
+Brief description of what this slice does
+
+## Data
+
+- **Input**: Props/parameters the slice receives
+- **Watches**: PowerSync queries (for query slices)
+- **Mutates**: Data modifications (for mutation slices)
+- **Emits**: Callbacks or events
+
+## UI
+
+Visual description of the component
+
+## Behavior
+
+Step-by-step behavior description
+```
+
+#### Benefits
+
+- **Clear requirements** - Specs define exactly what needs to be built
+- **Living documentation** - Specs stay up-to-date with implementation
+- **Onboarding** - New developers can read specs to understand features
+- **Refactoring safety** - Specs help ensure behavior doesn't change unexpectedly
+
 ### Client-First Mutations
 
 - Messages are written to local PowerSync SQLite DB instantly
@@ -101,12 +198,14 @@ Visit `http://localhost:3000`
 
 - `src/middleware.ts` - Sets anonymous user cookie
 - `src/lib/powersync.ts` - PowerSync client + schema
+- `src/lib/useWatchedQuery.ts` - Hook for reactive PowerSync queries
 - `src/routes/api/powersync/token.ts` - JWT endpoint
 - `src/server/db.ts` - Neon connection pool
-- `src/server/actions.ts` - Channel/message mutations
+- `src/server/actions.ts` - Server actions (used by mutation slices)
 - `src/server/agent.ts` - Mastra agent execution
-- `src/routes/(chat).tsx` - Layout with sidebar
-- `src/routes/channel/[id].tsx` - Messages view
+- `src/routes/(chat).tsx` - Layout with sidebar (orchestrates slices)
+- `src/routes/channel/[id].tsx` - Messages view (orchestrates slices)
+- `src/slices/` - All feature slices (query and mutation)
 
 ## MVP Limitations
 

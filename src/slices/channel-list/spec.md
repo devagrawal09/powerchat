@@ -2,20 +2,22 @@
 
 ## Purpose
 
-Displays all channels the current user is a member of.
+Query-only slice that displays all channels the current user is a member of.
 
 ## Data
 
-- **Input**: `userId` (string) - current user ID
+- **Input**: None (uses current user from membership query)
 - **Watches**: `channels` query via PowerSync
-  - Filters by user membership
+  - Joins with `channel_members` to filter by user membership
   - Ordered by `created_at DESC`
 - **Emits**: Navigation to `/channel/:id` on click
 
 ## UI
 
 - Vertical list of channel items
-- Each item shows: `# {channel.name}`
+- Each item shows:
+  - `# {channel.name}` (link)
+  - Delete button (separate mutation slice: `delete-channel`)
 - Active channel highlighted (blue background)
 - Hover state on non-active items
 - Loading state while query initializes
@@ -23,6 +25,8 @@ Displays all channels the current user is a member of.
 
 ## Behavior
 
-- Click channel → navigate to `/channel/:id`
+- Click channel name → navigate to `/channel/:id`
 - Active channel determined by current route params
-- Live updates when channels are created/deleted
+- Live updates when channels are created/deleted (via PowerSync watch)
+- Group hover state reveals delete button
+- Delete functionality handled by separate `delete-channel` mutation slice

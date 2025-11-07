@@ -1,7 +1,7 @@
 import { For, Show } from "solid-js";
 import { A } from "@solidjs/router";
 import { useWatchedQuery } from "~/lib/useWatchedQuery";
-import { writeTransaction } from "~/lib/powersync";
+import { DeleteChannel } from "~/slices/delete-channel";
 
 type ChannelRow = {
   id: string;
@@ -18,12 +18,6 @@ export function ChannelList() {
        WHERE cm.member_type = 'user'
        ORDER BY c.created_at DESC`
   );
-
-  const handleDelete = async (channelId: string) => {
-    await writeTransaction(async (tx) => {
-      await tx.execute("DELETE FROM channels WHERE id = ?", [channelId]);
-    });
-  };
 
   return (
     <div class="flex-1 overflow-y-auto p-2">
@@ -44,18 +38,7 @@ export function ChannelList() {
               >
                 # {channel.name}
               </A>
-              <button
-                type="button"
-                class="ml-2 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 focus:opacity-100"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  handleDelete(channel.id);
-                }}
-                aria-label="Delete channel"
-              >
-                ×
-              </button>
+              <DeleteChannel channelId={channel.id} />
             </div>
           )}
         </For>

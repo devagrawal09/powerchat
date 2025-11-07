@@ -17,6 +17,10 @@ type ChatMessagesProps = {
 };
 
 export function ChatMessages(props: ChatMessagesProps) {
+  // Query messages with author name resolution
+  // Note: This author name resolution logic (CASE statement) is duplicated in chat-input/index.tsx.
+  // This is acceptable per VSA principles (slice independence). Each slice maintains its own logic.
+  // If duplicated a third time, consider extracting to shared utility lib/getAuthorName.ts
   const messages = useWatchedQuery<MessageRow>(
     () =>
       `SELECT m.*, 
