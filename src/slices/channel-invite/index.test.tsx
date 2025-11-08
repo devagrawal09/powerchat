@@ -14,7 +14,7 @@ describe("ChannelInvite", () => {
 
   it("renders invite form", () => {
     render(() => <ChannelInvite channelId="test-channel" />);
-    
+
     expect(screen.getByText("Invite by Username")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Enter username")).toBeInTheDocument();
     expect(screen.getByText("Add User")).toBeInTheDocument();
@@ -22,7 +22,7 @@ describe("ChannelInvite", () => {
 
   it("validates empty username", async () => {
     render(() => <ChannelInvite channelId="test-channel" />);
-    
+
     const form = screen.getByText("Add User").closest("form")!;
     fireEvent.submit(form);
 
@@ -36,7 +36,7 @@ describe("ChannelInvite", () => {
     vi.mocked(inviteByUsername).mockResolvedValue({ success: true });
 
     render(() => <ChannelInvite channelId="test-channel-123" />);
-    
+
     const input = screen.getByPlaceholderText("Enter username");
     const button = screen.getByText("Add User");
 
@@ -57,8 +57,10 @@ describe("ChannelInvite", () => {
     vi.mocked(inviteByUsername).mockResolvedValue({ success: true });
 
     render(() => <ChannelInvite channelId="test-channel" />);
-    
-    const input = screen.getByPlaceholderText("Enter username") as HTMLInputElement;
+
+    const input = screen.getByPlaceholderText(
+      "Enter username"
+    ) as HTMLInputElement;
     const button = screen.getByText("Add User");
 
     fireEvent.input(input, { target: { value: "newuser" } });
@@ -78,7 +80,7 @@ describe("ChannelInvite", () => {
     });
 
     render(() => <ChannelInvite channelId="test-channel" />);
-    
+
     const input = screen.getByPlaceholderText("Enter username");
     const button = screen.getByText("Add User");
 
@@ -93,11 +95,14 @@ describe("ChannelInvite", () => {
   it("shows 'Adding...' while submitting", async () => {
     const { inviteByUsername } = await import("~/server/actions");
     vi.mocked(inviteByUsername).mockImplementation(
-      () => new Promise((resolve) => setTimeout(() => resolve({ success: true }), 1000))
+      () =>
+        new Promise((resolve) =>
+          setTimeout(() => resolve({ success: true }), 1000)
+        )
     );
 
     render(() => <ChannelInvite channelId="test-channel" />);
-    
+
     const input = screen.getByPlaceholderText("Enter username");
     const button = screen.getByText("Add User");
 
@@ -112,12 +117,17 @@ describe("ChannelInvite", () => {
   it("disables input and button while submitting", async () => {
     const { inviteByUsername } = await import("~/server/actions");
     vi.mocked(inviteByUsername).mockImplementation(
-      () => new Promise((resolve) => setTimeout(() => resolve({ success: true }), 1000))
+      () =>
+        new Promise((resolve) =>
+          setTimeout(() => resolve({ success: true }), 1000)
+        )
     );
 
     render(() => <ChannelInvite channelId="test-channel" />);
-    
-    const input = screen.getByPlaceholderText("Enter username") as HTMLInputElement;
+
+    const input = screen.getByPlaceholderText(
+      "Enter username"
+    ) as HTMLInputElement;
     const button = screen.getByText("Add User") as HTMLButtonElement;
 
     fireEvent.input(input, { target: { value: "newuser" } });
@@ -131,14 +141,14 @@ describe("ChannelInvite", () => {
 
   it("disables button when input is empty", () => {
     render(() => <ChannelInvite channelId="test-channel" />);
-    
+
     const button = screen.getByText("Add User") as HTMLButtonElement;
     expect(button.disabled).toBe(true);
   });
 
   it("enables button when input has value", () => {
     render(() => <ChannelInvite channelId="test-channel" />);
-    
+
     const input = screen.getByPlaceholderText("Enter username");
     const button = screen.getByText("Add User") as HTMLButtonElement;
 
@@ -151,7 +161,7 @@ describe("ChannelInvite", () => {
     vi.mocked(inviteByUsername).mockResolvedValue({ success: true });
 
     render(() => <ChannelInvite channelId="test-channel" />);
-    
+
     const input = screen.getByPlaceholderText("Enter username");
     const button = screen.getByText("Add User");
 
@@ -171,7 +181,7 @@ describe("ChannelInvite", () => {
     vi.mocked(inviteByUsername).mockRejectedValue(new Error("Network error"));
 
     render(() => <ChannelInvite channelId="test-channel" />);
-    
+
     const input = screen.getByPlaceholderText("Enter username");
     const button = screen.getByText("Add User");
 
@@ -183,4 +193,3 @@ describe("ChannelInvite", () => {
     });
   });
 });
-

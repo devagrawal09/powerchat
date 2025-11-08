@@ -41,7 +41,9 @@ vi.mock("~/lib/useWatchedQuery", () => ({
 }));
 
 vi.mock("~/components/Markdown", () => ({
-  RenderMarkdown: (props: { children: string }) => <span>{props.children}</span>,
+  RenderMarkdown: (props: { children: string }) => (
+    <span>{props.children}</span>
+  ),
 }));
 
 describe("ChatMessages", () => {
@@ -51,7 +53,7 @@ describe("ChatMessages", () => {
 
   it("renders all messages", () => {
     render(() => <ChatMessages channelId="channel-1" />);
-    
+
     expect(screen.getByText("Hello world")).toBeInTheDocument();
     expect(screen.getByText("Hello! How can I help?")).toBeInTheDocument();
     expect(screen.getByText("Channel created")).toBeInTheDocument();
@@ -59,7 +61,7 @@ describe("ChatMessages", () => {
 
   it("displays author names", () => {
     render(() => <ChatMessages channelId="channel-1" />);
-    
+
     expect(screen.getByText("user-1")).toBeInTheDocument();
     expect(screen.getByText("assistant")).toBeInTheDocument();
     expect(screen.getByText("System")).toBeInTheDocument();
@@ -67,7 +69,7 @@ describe("ChatMessages", () => {
 
   it("displays author avatars with first letter", () => {
     render(() => <ChatMessages channelId="channel-1" />);
-    
+
     const avatars = screen.getAllByText(/^[UAS]$/);
     expect(avatars).toHaveLength(3);
     expect(avatars[0]).toHaveTextContent("U"); // user-1
@@ -77,7 +79,7 @@ describe("ChatMessages", () => {
 
   it("displays timestamps in localized format", () => {
     render(() => <ChatMessages channelId="channel-1" />);
-    
+
     // Timestamps should be formatted by toLocaleTimeString()
     const timestamps = document.querySelectorAll(".text-xs.text-gray-500");
     expect(timestamps.length).toBeGreaterThan(0);
@@ -92,7 +94,7 @@ describe("ChatMessages", () => {
     });
 
     const { container } = render(() => <ChatMessages channelId="channel-1" />);
-    
+
     // When loading, the For loop won't render any messages
     // Check that the container doesn't have message elements
     const messageElements = container.querySelectorAll(".flex.gap-3");
@@ -108,7 +110,7 @@ describe("ChatMessages", () => {
     });
 
     const { container } = render(() => <ChatMessages channelId="channel-1" />);
-    
+
     const messageElements = container.querySelectorAll(".flex.gap-3");
     expect(messageElements.length).toBe(0);
   });
@@ -132,19 +134,19 @@ describe("ChatMessages", () => {
     });
 
     render(() => <ChatMessages channelId="channel-1" />);
-    
+
     expect(screen.getByText("Unknown")).toBeInTheDocument();
     expect(screen.getByText("?")).toBeInTheDocument(); // Avatar fallback
   });
 
   it("queries messages with correct channel ID", async () => {
     const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    
+
     render(() => <ChatMessages channelId="test-channel-123" />);
-    
+
     expect(useWatchedQuery).toHaveBeenCalled();
     const call = vi.mocked(useWatchedQuery).mock.calls[0];
-    
+
     // Check that the query parameters function returns the correct channel ID
     const paramsFunction = call[1];
     expect(paramsFunction()).toEqual(["test-channel-123"]);
@@ -152,27 +154,27 @@ describe("ChatMessages", () => {
 
   it("orders messages by created_at and id", async () => {
     const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    
+
     render(() => <ChatMessages channelId="channel-1" />);
-    
+
     // Verify the SQL query includes ORDER BY clause
     const call = vi.mocked(useWatchedQuery).mock.calls[0];
     const sqlFunction = call[0];
     const sql = sqlFunction();
-    
+
     expect(sql).toContain("ORDER BY m.created_at ASC, m.id ASC");
   });
 
   it("includes author name resolution in query", async () => {
     const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    
+
     render(() => <ChatMessages channelId="channel-1" />);
-    
+
     // Verify the SQL query includes CASE statement for author name resolution
     const call = vi.mocked(useWatchedQuery).mock.calls[0];
     const sqlFunction = call[0];
     const sql = sqlFunction();
-    
+
     expect(sql).toContain("CASE");
     expect(sql).toContain("WHEN m.author_type = 'user'");
     expect(sql).toContain("WHEN m.author_type = 'agent'");
@@ -181,10 +183,9 @@ describe("ChatMessages", () => {
 
   it("renders markdown content", () => {
     render(() => <ChatMessages channelId="channel-1" />);
-    
+
     // Verify RenderMarkdown component is used
     // The mock replaces it with a simple span, but the content should still render
     expect(screen.getByText("Hello world")).toBeInTheDocument();
   });
 });
-

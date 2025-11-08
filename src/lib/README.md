@@ -120,18 +120,22 @@ await db.execute("SELECT * FROM messages");
 Before adding a new shared library, ask:
 
 1. **Is this infrastructure or business logic?**
+
    - Infrastructure → shared library ✓
    - Business logic → belongs in slice ✗
 
 2. **Is this used by multiple slices?**
+
    - Yes → consider shared library ✓
    - No → keep in slice ✗
 
 3. **Does this couple slices together?**
+
    - No coupling → safe to share ✓
    - Creates coupling → keep in slices ✗
 
 4. **Can this be a pure function?**
+
    - Pure function → good candidate ✓
    - Has side effects → evaluate carefully ⚠️
 
@@ -170,4 +174,3 @@ Shared libraries should have comprehensive unit tests since they're used across 
 - **Architecture**: See `README.md` for VSA principles
 - **ADRs**: See `.research/adr/` for architectural decisions
 - **Slice Specs**: See `src/slices/*/spec.md` for feature documentation
-

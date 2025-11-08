@@ -36,18 +36,22 @@ Every slice follows **spec-driven development**:
 # Feature Name
 
 ## Purpose
+
 Brief description of what this slice does
 
 ## Data
+
 - Input: Props/parameters the slice receives
 - Watches: PowerSync queries (for query slices)
 - Mutates: Data modifications (for mutation slices)
 - Emits: Callbacks or events
 
 ## UI
+
 Visual description of the component
 
 ## Behavior
+
 Step-by-step behavior description
 ```
 
@@ -138,18 +142,22 @@ If spec doesn't match implementation:
 # Chat Input
 
 ## Purpose
+
 Mutation slice for sending messages and triggering agent responses.
 
 ## Data
+
 - Input: channelId (string), channelName (string)
 - Mutates: messages table via writeTransaction
 - Watches: channel_members (to resolve agent mentions)
 
 ## UI
+
 - Text input with placeholder
 - Send button (disabled when empty)
 
 ## Behavior
+
 - Enter or button sends message
 - Detects @mentions and triggers agents
 - Clears input after send
@@ -169,4 +177,3 @@ Does chat stuff. Has an input and shows messages.
 - **ADR-003**: Query/Mutation Separation
 - All `src/slices/*/spec.md` files
 - `src/lib/README.md` - Shared services documentation
-

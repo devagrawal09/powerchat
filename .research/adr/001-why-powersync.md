@@ -129,4 +129,3 @@ Most application logic (slices) would remain unchanged since they use abstracted
 - `src/lib/powersync.ts` - PowerSync client implementation
 - `src/lib/useWatchedQuery.ts` - Reactive query hook
 - `src/server/powersync.ts` - Server-side PowerSync integration
-

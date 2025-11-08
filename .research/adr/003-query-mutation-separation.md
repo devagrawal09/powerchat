@@ -159,9 +159,11 @@ const channels = useWatchedQuery(...);  // NOT OK: querying for display
 ### Mixed (After Refactoring): `chat-input` + `mention-autocomplete`
 
 Before refactoring:
+
 - `chat-input` did both queries (for autocomplete) and mutations (sending)
 
 After refactoring:
+
 - `chat-input` - Mutation slice for sending messages
 - `mention-autocomplete` - Query slice for displaying suggestions (future)
 
@@ -170,4 +172,3 @@ After refactoring:
 - **ADR-004**: Vertical Slice Architecture
 - **ADR-002**: Spec-Driven Development
 - Review document: `.research/powerchat-vsa-review.md` - Original analysis
-

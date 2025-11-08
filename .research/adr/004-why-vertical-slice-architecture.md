@@ -228,4 +228,3 @@ How we measure if VSA is working:
 - **ADR-003**: Query/Mutation Separation (how to organize slices)
 - Review: `.research/vertical-slice-architecture-research.md` - VSA research
 - Review: `.research/powerchat-vsa-review.md` - Architecture review
-

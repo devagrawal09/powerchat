@@ -23,7 +23,7 @@ describe("UsernameRegistration", () => {
 
   it("renders registration form", () => {
     render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-    
+
     expect(screen.getByText("Welcome to PowerChat")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Enter username")).toBeInTheDocument();
     expect(screen.getByText("Continue")).toBeInTheDocument();
@@ -31,7 +31,7 @@ describe("UsernameRegistration", () => {
 
   it("validates minimum username length", async () => {
     render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-    
+
     const input = screen.getByPlaceholderText("Enter username");
     const button = screen.getByText("Continue");
 
@@ -49,7 +49,7 @@ describe("UsernameRegistration", () => {
 
   it("validates maximum username length", async () => {
     render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-    
+
     const input = screen.getByPlaceholderText("Enter username");
     const button = screen.getByText("Continue");
 
@@ -67,7 +67,7 @@ describe("UsernameRegistration", () => {
 
   it("validates username format - only allows alphanumeric, hyphens, underscores", async () => {
     render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-    
+
     const input = screen.getByPlaceholderText("Enter username");
     const button = screen.getByText("Continue");
 
@@ -94,7 +94,7 @@ describe("UsernameRegistration", () => {
     vi.mocked(useAction).mockReturnValue(mockRegister);
 
     render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-    
+
     const input = screen.getByPlaceholderText("Enter username");
     const form = input.closest("form")!;
 
@@ -115,7 +115,7 @@ describe("UsernameRegistration", () => {
     vi.mocked(useAction).mockReturnValue(mockRegister);
 
     render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-    
+
     const input = screen.getByPlaceholderText("Enter username");
     const form = input.closest("form")!;
 
@@ -136,7 +136,7 @@ describe("UsernameRegistration", () => {
     vi.mocked(useAction).mockReturnValue(mockRegister);
 
     render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-    
+
     const input = screen.getByPlaceholderText("Enter username");
     const form = input.closest("form")!;
 
@@ -156,7 +156,7 @@ describe("UsernameRegistration", () => {
     vi.mocked(useAction).mockReturnValue(mockRegister);
 
     render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-    
+
     const input = screen.getByPlaceholderText("Enter username");
     const form = input.closest("form")!;
 
@@ -172,29 +172,29 @@ describe("UsernameRegistration", () => {
 
   it("disables button when username is too short", () => {
     render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-    
+
     const input = screen.getByPlaceholderText("Enter username");
     const button = screen.getByText("Continue") as HTMLButtonElement;
 
     fireEvent.input(input, { target: { value: "ab" } });
-    
+
     expect(button.disabled).toBe(true);
   });
 
   it("enables button when username is valid length", () => {
     render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-    
+
     const input = screen.getByPlaceholderText("Enter username");
     const button = screen.getByText("Continue") as HTMLButtonElement;
 
     fireEvent.input(input, { target: { value: "abc" } });
-    
+
     expect(button.disabled).toBe(false);
   });
 
   it("trims whitespace from username before validation", async () => {
     render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-    
+
     const input = screen.getByPlaceholderText("Enter username");
     const form = input.closest("form")!;
 
@@ -208,4 +208,3 @@ describe("UsernameRegistration", () => {
     });
   });
 });
-
