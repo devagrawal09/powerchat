@@ -87,11 +87,23 @@ export const createChannel = action(async (formData: FormData) => {
 
 export const inviteByUsername = action(async (formData: FormData) => {
   "use server";
+  const currentUser = getUsername();
   const channelId = formData.get("channelId") as string;
   const username = ((formData.get("username") as string) || "").trim();
 
   if (!channelId || !username) {
     return { error: "Missing required fields" };
+  }
+
+  // Verify current user is a member of the channel
+  const isMember = await getOne<{ exists: boolean }>(
+    `SELECT 1 as exists FROM channel_members 
+     WHERE channel_id = $1 AND member_type = 'user' AND member_id = $2`,
+    [channelId, currentUser]
+  );
+
+  if (!isMember) {
+    return { error: "You must be a member of this channel to invite users" };
   }
 
   // Check if user exists

@@ -22,11 +22,8 @@ Shows users and agents in the current channel.
   - **Users** header (uppercase, small, gray)
     - List of user display names
   - **Agents** header (uppercase, small, gray)
-    - List of agent names (prefixed with @)
+    - List of agent names
 - Loading state while query initializes
-- Fallback names:
-  - Users → "Anonymous"
-  - Agents → "assistant" (for default) or "Agent"
 
 ## Behavior
 

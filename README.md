@@ -91,6 +91,7 @@ Every slice lives in `src/slices/{feature-name}/` and contains:
 
 - `index.tsx` - The component/hook implementation
 - `spec.md` - Specification document (see Spec-Driven Development below)
+- `index.test.tsx` - Test file (see Testing below)
 
 #### Query vs Mutation Slices
 
@@ -177,6 +178,52 @@ Step-by-step behavior description
 - **Living documentation** - Specs stay up-to-date with implementation
 - **Onboarding** - New developers can read specs to understand features
 - **Refactoring safety** - Specs help ensure behavior doesn't change unexpectedly
+
+### Testing
+
+Every slice **must** have a test file (`index.test.tsx`). Tests can be simple but should verify basic functionality:
+
+- **Query slices**: Test that data renders correctly, loading states work, and empty states are handled
+- **Mutation slices**: Test that user interactions trigger the correct mutations and callbacks
+
+#### Test Structure
+
+Tests use Vitest and `@solidjs/testing-library`:
+
+```tsx
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen } from "@solidjs/testing-library";
+import { MySlice } from "./index";
+
+// Mock dependencies
+vi.mock("~/lib/useWatchedQuery", () => ({
+  useWatchedQuery: vi.fn(() => ({ data: [], loading: false })),
+}));
+
+describe("MySlice", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders correctly", () => {
+    render(() => <MySlice prop="value" />);
+    expect(screen.getByText("Expected text")).toBeInTheDocument();
+  });
+});
+```
+
+#### Running Tests
+
+```bash
+bun test
+```
+
+#### Test Philosophy
+
+- **Keep tests simple** - Focus on basic functionality, not edge cases
+- **Mock external dependencies** - Mock PowerSync queries, server actions, etc.
+- **Test behavior, not implementation** - Verify what users see and experience
+- **Every slice gets a test** - Even if it's just a few basic assertions
 
 ### Client-First Mutations
 

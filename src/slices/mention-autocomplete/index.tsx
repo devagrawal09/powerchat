@@ -20,7 +20,11 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
   const members = useWatchedQuery<MemberRow>(
     () =>
       `SELECT cm.member_type, cm.member_id,
-              COALESCE(u.id, a.name) AS name
+              CASE 
+                WHEN cm.member_type = 'user' THEN COALESCE(u.id, cm.member_id)
+                WHEN cm.member_type = 'agent' THEN COALESCE(a.name, CASE WHEN cm.member_id = '00000000-0000-0000-0000-000000000001' THEN 'assistant' ELSE 'Agent' END)
+                ELSE cm.member_id
+              END AS name
        FROM channel_members cm
        LEFT JOIN users u ON cm.member_type = 'user' AND u.id = cm.member_id
        LEFT JOIN agents a ON cm.member_type = 'agent' AND a.id = cm.member_id

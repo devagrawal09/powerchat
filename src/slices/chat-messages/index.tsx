@@ -43,29 +43,37 @@ export function ChatMessages(props: ChatMessagesProps) {
 
   return (
     <div class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50">
-      <Show when={!messages.loading}>
-        <For each={messages.data}>
-          {(message) => (
-            <div class="flex gap-3">
-              <div class="shrink-0 w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-xs font-semibold text-gray-700">
-                {message.author_name?.[0]?.toUpperCase() || "?"}
-              </div>
-              <div class="flex-1">
-                <div class="flex items-baseline gap-2">
-                  <span class="font-semibold text-sm text-gray-900">
-                    {message.author_name || "Unknown"}
-                  </span>
-                  <span class="text-xs text-gray-500">
-                    {new Date(message.created_at).toLocaleTimeString()}
-                  </span>
+      <Show
+        when={!messages.loading}
+        fallback={<div class="text-sm text-gray-500">Loading messages...</div>}
+      >
+        <Show
+          when={messages.data.length > 0}
+          fallback={<div class="text-sm text-gray-500">No messages yet</div>}
+        >
+          <For each={messages.data}>
+            {(message) => (
+              <div class="flex gap-3">
+                <div class="shrink-0 w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-xs font-semibold text-gray-700">
+                  {message.author_name?.[0]?.toUpperCase() || "?"}
                 </div>
-                <div class="text-sm mt-1 text-gray-900">
-                  <RenderMarkdown>{message.content}</RenderMarkdown>
+                <div class="flex-1">
+                  <div class="flex items-baseline gap-2">
+                    <span class="font-semibold text-sm text-gray-900">
+                      {message.author_name || "Unknown"}
+                    </span>
+                    <span class="text-xs text-gray-500">
+                      {new Date(message.created_at).toLocaleTimeString()}
+                    </span>
+                  </div>
+                  <div class="text-sm mt-1 text-gray-900">
+                    <RenderMarkdown>{message.content}</RenderMarkdown>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-        </For>
+            )}
+          </For>
+        </Show>
       </Show>
     </div>
   );

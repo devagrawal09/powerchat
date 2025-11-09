@@ -15,10 +15,10 @@ export function ChannelMemberList(props: ChannelMemberListProps) {
   // Users in channel
   const users = useWatchedQuery<MemberRow>(
     () =>
-      `SELECT 'user' as member_type, u.id as member_id, u.id as name
+      `SELECT 'user' as member_type, cm.member_id as member_id, COALESCE(u.id, cm.member_id) as name
        FROM channel_members cm
-       JOIN users u ON cm.member_type = 'user' AND u.id = cm.member_id
-       WHERE cm.channel_id = ?
+       LEFT JOIN users u ON cm.member_type = 'user' AND u.id = cm.member_id
+       WHERE cm.channel_id = ? AND cm.member_type = 'user'
        ORDER BY name`,
     () => [props.channelId]
   );
@@ -26,11 +26,11 @@ export function ChannelMemberList(props: ChannelMemberListProps) {
   // Agents in channel
   const agents = useWatchedQuery<MemberRow>(
     () =>
-      `SELECT 'agent' as member_type, a.id as member_id,
-              COALESCE(a.name, CASE WHEN a.id = '00000000-0000-0000-0000-000000000001' THEN 'assistant' ELSE 'Agent' END) as name
+      `SELECT 'agent' as member_type, cm.member_id as member_id,
+              COALESCE(a.name, CASE WHEN cm.member_id = '00000000-0000-0000-0000-000000000001' THEN 'assistant' ELSE 'Agent' END) as name
        FROM channel_members cm
-       JOIN agents a ON cm.member_type = 'agent' AND a.id = cm.member_id
-       WHERE cm.channel_id = ?
+       LEFT JOIN agents a ON cm.member_type = 'agent' AND a.id = cm.member_id
+       WHERE cm.channel_id = ? AND cm.member_type = 'agent'
        ORDER BY name`,
     () => [props.channelId]
   );
