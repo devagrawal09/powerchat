@@ -1,7 +1,7 @@
 import { createSignal, Show, For, createMemo } from "solid-js";
-import { useAction } from "@solidjs/router";
-import { inviteByUsername, inviteAgent } from "./action";
+import { writeTransaction } from "~/lib/powersync";
 import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { getUsername } from "~/lib/getUsername";
 
 type ChannelInviteProps = {
   channelId: string;
@@ -17,6 +17,10 @@ type MemberRow = {
   member_id: string;
 };
 
+type UserRow = {
+  id: string;
+};
+
 export function ChannelInvite(props: ChannelInviteProps) {
   const [username, setUsername] = createSignal("");
   const [selectedAgentId, setSelectedAgentId] = createSignal<string | null>(
@@ -28,9 +32,6 @@ export function ChannelInvite(props: ChannelInviteProps) {
     type: "success" | "error";
     text: string;
   } | null>(null);
-
-  const invite = useAction(inviteByUsername);
-  const inviteAgentAction = useAction(inviteAgent);
 
   // Get all available agents
   const allAgents = useWatchedQuery<AgentRow>(
@@ -45,6 +46,18 @@ export function ChannelInvite(props: ChannelInviteProps) {
     () => [props.channelId]
   );
 
+  // Get all users for validation
+  const allUsers = useWatchedQuery<UserRow>(
+    () => `SELECT id FROM users`,
+    () => []
+  );
+
+  // Get current channel members to check for duplicates
+  const channelMembers = useWatchedQuery<MemberRow>(
+    () => `SELECT member_id FROM channel_members WHERE channel_id = ?`,
+    () => [props.channelId]
+  );
+
   // Filter out agents already in channel
   const availableAgents = createMemo(() => {
     const inChannel = new Set(
@@ -56,9 +69,38 @@ export function ChannelInvite(props: ChannelInviteProps) {
   const handleInviteUser = async (e: Event) => {
     e.preventDefault();
     const value = username().trim();
+    const currentUser = getUsername();
 
     if (!value) {
       setMessage({ type: "error", text: "Please enter a username" });
+      return;
+    }
+
+    // Verify current user is a member of the channel
+    const currentUserIsMember = (channelMembers.data || []).find(
+      (m) => m.member_id === currentUser
+    );
+    if (!currentUserIsMember) {
+      setMessage({
+        type: "error",
+        text: "You must be a member of this channel to invite users",
+      });
+      return;
+    }
+
+    // Check if user exists
+    const userExists = (allUsers.data || []).find((u) => u.id === value);
+    if (!userExists) {
+      setMessage({ type: "error", text: "User not found" });
+      return;
+    }
+
+    // Check if user is already a member
+    const isMember = (channelMembers.data || []).find(
+      (m) => m.member_id === value
+    );
+    if (isMember) {
+      setMessage({ type: "error", text: "User is already a member" });
       return;
     }
 
@@ -66,24 +108,20 @@ export function ChannelInvite(props: ChannelInviteProps) {
     setMessage(null);
 
     try {
-      const formData = new FormData();
-      formData.append("channelId", props.channelId);
-      formData.append("username", value);
+      const memberId = crypto.randomUUID();
+      const now = new Date().toISOString();
 
-      const result = await invite(formData);
+      await writeTransaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO channel_members (id, channel_id, member_type, member_id, joined_at)
+           VALUES (?, ?, 'user', ?, ?)`,
+          [memberId, props.channelId, value, now]
+        );
+      });
 
-      if (!result) {
-        setMessage({ type: "error", text: "No response from server" });
-        return;
-      }
-
-      if (result.error) {
-        setMessage({ type: "error", text: result.error });
-      } else if (result.success) {
-        setMessage({ type: "success", text: `${value} added to channel!` });
-        setUsername("");
-        setTimeout(() => setMessage(null), 3000);
-      }
+      setMessage({ type: "success", text: `${value} added to channel!` });
+      setUsername("");
+      setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
       setMessage({
         type: "error",
@@ -96,8 +134,38 @@ export function ChannelInvite(props: ChannelInviteProps) {
 
   const handleInviteAgent = async () => {
     const agentId = selectedAgentId();
+    const currentUser = getUsername();
+
     if (!agentId) {
       setMessage({ type: "error", text: "Please select an agent" });
+      return;
+    }
+
+    // Verify current user is a member of the channel
+    const currentUserIsMember = (channelMembers.data || []).find(
+      (m) => m.member_id === currentUser
+    );
+    if (!currentUserIsMember) {
+      setMessage({
+        type: "error",
+        text: "You must be a member of this channel to invite agents",
+      });
+      return;
+    }
+
+    // Check if agent exists
+    const agentExists = (allAgents.data || []).find((a) => a.id === agentId);
+    if (!agentExists) {
+      setMessage({ type: "error", text: "Agent not found" });
+      return;
+    }
+
+    // Check if agent is already a member
+    const isMember = (channelMembers.data || []).find(
+      (m) => m.member_id === agentId
+    );
+    if (isMember) {
+      setMessage({ type: "error", text: "Agent is already a member" });
       return;
     }
 
@@ -105,26 +173,22 @@ export function ChannelInvite(props: ChannelInviteProps) {
     setMessage(null);
 
     try {
-      const formData = new FormData();
-      formData.append("channelId", props.channelId);
-      formData.append("agentId", agentId);
+      const memberId = crypto.randomUUID();
+      const now = new Date().toISOString();
 
-      const result = await inviteAgentAction(formData);
+      await writeTransaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO channel_members (id, channel_id, member_type, member_id, joined_at)
+           VALUES (?, ?, 'agent', ?, ?)`,
+          [memberId, props.channelId, agentId, now]
+        );
+      });
 
-      if (!result) {
-        setMessage({ type: "error", text: "No response from server" });
-        return;
-      }
-
-      if (result.error) {
-        setMessage({ type: "error", text: result.error });
-      } else if (result.success) {
-        const agentName =
-          availableAgents().find((a) => a.id === agentId)?.name || "Agent";
-        setMessage({ type: "success", text: `${agentName} added to channel!` });
-        setSelectedAgentId(null);
-        setTimeout(() => setMessage(null), 3000);
-      }
+      const agentName =
+        availableAgents().find((a) => a.id === agentId)?.name || "Agent";
+      setMessage({ type: "success", text: `${agentName} added to channel!` });
+      setSelectedAgentId(null);
+      setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
       setMessage({
         type: "error",

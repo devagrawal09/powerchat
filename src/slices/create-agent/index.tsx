@@ -1,10 +1,15 @@
 import { createSignal, Show } from "solid-js";
-import { useAction } from "@solidjs/router";
-import { createAgent } from "./action";
+import { writeTransaction } from "~/lib/powersync";
+import { useWatchedQuery } from "~/lib/useWatchedQuery";
 
 type CreateAgentProps = {
   channelId: string;
   onSuccess?: () => void;
+};
+
+type AgentRow = {
+  id: string;
+  name: string;
 };
 
 export function CreateAgent(props: CreateAgentProps) {
@@ -18,17 +23,46 @@ export function CreateAgent(props: CreateAgentProps) {
     text: string;
   } | null>(null);
 
-  const create = useAction(createAgent);
+  // Query existing agents to check for duplicates
+  const existingAgents = useWatchedQuery<AgentRow>(
+    () => `SELECT id, name FROM agents`,
+    () => []
+  );
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
 
-    if (
-      !name().trim() ||
-      !systemInstructions().trim() ||
-      !description().trim()
-    ) {
+    const trimmedName = name().trim();
+    const trimmedSystemInstructions = systemInstructions().trim();
+    const trimmedDescription = description().trim();
+
+    if (!trimmedName || !trimmedSystemInstructions || !trimmedDescription) {
       setMessage({ type: "error", text: "All fields are required" });
+      return;
+    }
+
+    if (trimmedName.length < 2) {
+      setMessage({
+        type: "error",
+        text: "Agent name must be at least 2 characters",
+      });
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_-]+$/.test(trimmedName)) {
+      setMessage({
+        type: "error",
+        text: "Agent name can only contain letters, numbers, hyphens, and underscores",
+      });
+      return;
+    }
+
+    // Check for duplicate agent name
+    const duplicate = (existingAgents.data || []).find(
+      (a) => a.name.toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (duplicate) {
+      setMessage({ type: "error", text: "Agent name already taken" });
       return;
     }
 
@@ -36,31 +70,33 @@ export function CreateAgent(props: CreateAgentProps) {
     setMessage(null);
 
     try {
-      const formData = new FormData();
-      formData.append("name", name().trim());
-      formData.append("system_instructions", systemInstructions().trim());
-      formData.append("description", description().trim());
+      const agentId = crypto.randomUUID();
+      const now = new Date().toISOString();
 
-      const result = await create(formData);
+      await writeTransaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO agents (id, name, system_instructions, description, model_config, created_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [
+            agentId,
+            trimmedName,
+            trimmedSystemInstructions,
+            trimmedDescription,
+            JSON.stringify({}),
+            now,
+          ]
+        );
+      });
 
-      if (!result) {
-        setMessage({ type: "error", text: "No response from server" });
-        return;
-      }
-
-      if (result.error) {
-        setMessage({ type: "error", text: result.error });
-      } else if (result.success) {
-        setMessage({ type: "success", text: `Agent "${name()}" created!` });
-        setName("");
-        setSystemInstructions("");
-        setDescription("");
-        setTimeout(() => {
-          setIsOpen(false);
-          setMessage(null);
-          props.onSuccess?.();
-        }, 2000);
-      }
+      setMessage({ type: "success", text: `Agent "${trimmedName}" created!` });
+      setName("");
+      setSystemInstructions("");
+      setDescription("");
+      setTimeout(() => {
+        setIsOpen(false);
+        setMessage(null);
+        props.onSuccess?.();
+      }, 2000);
     } catch (err: any) {
       setMessage({
         type: "error",

@@ -22,7 +22,7 @@ class PowerChatConnector implements PowerSyncBackendConnector {
   }
 
   async uploadData(database: AbstractPowerSyncDatabase): Promise<void> {
-    console.log("[uploadData] uploadData");
+    console.log("[uploadData] uploadData start");
     // Process all pending transactions in a loop
     while (true) {
       const transaction = await database.getNextCrudTransaction();
@@ -30,29 +30,33 @@ class PowerChatConnector implements PowerSyncBackendConnector {
         break;
       }
 
-      try {
-        // Call server function directly - no HTTP overhead!
-        const result = await uploadToServer(
-          transaction.crud.map((op) => ({
-            op: op.op,
-            table: op.table,
-            id: op.id,
-            opData: op.opData ?? {},
-          }))
-        );
+      console.log("[uploadData] transaction", transaction);
 
-        // Check if upload was successful
-        if (!result.success) {
-          throw new Error(result.error || "Upload failed");
-        }
+      // Call server function directly - no HTTP overhead!
+      const p = uploadToServer(
+        transaction.crud.map((op) => ({
+          op: op.op,
+          table: op.table,
+          id: op.id,
+          opData: op.opData ?? {},
+        }))
+      );
 
-        // Mark as complete only after successful write
-        await transaction.complete();
-      } catch (error) {
-        console.error("[PowerSync] Upload failed:", error);
-        throw error; // PowerSync will retry
+      console.log("[uploadData] p", p);
+
+      const result = await p;
+
+      console.log("[uploadData] result", result);
+
+      // Check if upload was successful
+      if (!result.success) {
+        throw new Error(result.error || "Upload failed");
       }
+
+      // Mark as complete only after successful write
+      await transaction.complete();
     }
+    console.log("[uploadData] uploadData end");
   }
 }
 
@@ -66,6 +70,8 @@ const schema = new Schema({
     id: column.text,
     name: column.text,
     model_config: column.text,
+    system_instructions: column.text,
+    description: column.text,
     created_at: column.text,
   }),
   channels: new Table({

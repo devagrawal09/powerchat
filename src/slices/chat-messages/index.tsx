@@ -40,6 +40,11 @@ export function ChatMessages(props: ChatMessagesProps) {
     () => [props.channelId]
   );
 
+  createEffect(() => {
+    const m = JSON.stringify(messages.data, null, 2);
+    console.log("messages", m);
+  });
+
   const currentUsername = createMemo(() => getUsername());
 
   // Track message count to detect new messages

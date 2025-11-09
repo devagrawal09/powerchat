@@ -1,14 +1,23 @@
 import { createSignal, Show } from "solid-js";
-import { useAction, useSubmission } from "@solidjs/router";
-import { registerUsername } from "./action";
+import { writeTransaction } from "~/lib/powersync";
+import { useWatchedQuery } from "~/lib/useWatchedQuery";
+
+type UserRow = {
+  id: string;
+};
 
 export function UsernameRegistration(props: {
   onSuccess: (username: string) => void;
 }) {
   const [username, setUsername] = createSignal("");
   const [error, setError] = createSignal("");
-  const register = useAction(registerUsername);
-  const submission = useSubmission(registerUsername);
+  const [submitting, setSubmitting] = createSignal(false);
+
+  // Query existing users to check for duplicates
+  const existingUsers = useWatchedQuery<UserRow>(
+    () => `SELECT id FROM users`,
+    () => []
+  );
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
@@ -31,34 +40,38 @@ export function UsernameRegistration(props: {
       return;
     }
 
+    // Check for duplicate username
+    const duplicate = (existingUsers.data || []).find(
+      (u) => u.id.toLowerCase() === value.toLowerCase()
+    );
+    if (duplicate) {
+      setError("Username already taken");
+      return;
+    }
+
     setError("");
+    setSubmitting(true);
 
     try {
-      const formData = new FormData();
-      formData.append("username", value);
-      const result = await register(formData);
+      const now = new Date().toISOString();
 
-      console.log("[UsernameRegistration] Result:", result);
+      await writeTransaction(async (tx) => {
+        await tx.execute(`INSERT INTO users (id, created_at) VALUES (?, ?)`, [
+          value,
+          now,
+        ]);
+      });
 
-      if (!result) {
-        setError("No response from server");
-        return;
-      }
-
-      if (result.error) {
-        setError(result.error);
-      } else if (result.success && result.username) {
-        // Set cookie
-        document.cookie = `pc_username=${result.username}; path=/; max-age=${
-          60 * 60 * 24 * 365
-        }; SameSite=Lax`;
-        props.onSuccess(result.username);
-      } else {
-        setError("Unexpected response from server");
-      }
+      // Set cookie
+      document.cookie = `pc_username=${value}; path=/; max-age=${
+        60 * 60 * 24 * 365
+      }; SameSite=Lax`;
+      props.onSuccess(value);
     } catch (err: any) {
       console.error("[UsernameRegistration] Error:", err);
       setError(err?.message || "Failed to register username");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -77,7 +90,7 @@ export function UsernameRegistration(props: {
             onInput={(e) => setUsername(e.currentTarget.value)}
             placeholder="Enter username"
             class="w-full px-4 py-2 border border-gray-300 rounded text-gray-900 placeholder-gray-400 mb-2"
-            disabled={submission.pending}
+            disabled={submitting()}
             autofocus
           />
 
@@ -87,10 +100,10 @@ export function UsernameRegistration(props: {
 
           <button
             type="submit"
-            disabled={submission.pending || username().trim().length < 3}
+            disabled={submitting() || username().trim().length < 3}
             class="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {submission.pending ? "Creating..." : "Continue"}
+            {submitting() ? "Creating..." : "Continue"}
           </button>
         </form>
 

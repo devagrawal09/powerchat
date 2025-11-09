@@ -55,10 +55,10 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
     const list = (members.data || [])
       .filter((m) => m.name)
       .map((m) => ({
-        type: m.member_type,
-        id: m.member_id,
+      type: m.member_type,
+      id: m.member_id,
         name: m.name!,
-      }));
+    }));
     const filtered = list.filter((o) => fuzzyMatch(o.name, q));
     return filtered;
   });

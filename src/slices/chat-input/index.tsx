@@ -110,30 +110,43 @@ export function ChatInput(props: ChatInputProps) {
         return;
       }
 
-      console.log(
-        "[send] username",
+      console.log("before writeTransaction", {
         username,
-        "messageId",
         messageId,
-        "text",
-        text
-      );
+        text,
+      });
 
       // Insert user message
-      await writeTransaction(async (tx) => {
-        await tx.execute(
+      const t = writeTransaction(async (tx) => {
+        console.log("before execute", {
+          tx,
+          messageId,
+          channelId: props.channelId,
+          username,
+          text,
+          userMessageCreatedAt,
+        });
+        const result = tx.execute(
           `INSERT INTO messages (id, channel_id, author_type, author_id, content, created_at)
            VALUES (?, ?, 'user', ?, ?, ?)`,
           [messageId, props.channelId, username, text, userMessageCreatedAt]
         );
+        console.log("after execute sync");
+
+        await result;
+        console.log("after execute async");
+        return result;
       });
+
+      console.log("after writeTransaction sync");
+      await t;
+
+      console.log("after writeTransaction async");
 
       // Detect mentions
       const mentionedNames = Array.from(text.matchAll(/@([a-z0-9_]+)/gi)).map(
         (m) => m[1].toLowerCase()
       );
-
-      console.log("[send] mentioned names", mentionedNames);
 
       // Resolve agent IDs
       // Note: This duplication of member name resolution is acceptable per VSA principles.
@@ -149,8 +162,6 @@ export function ChatInput(props: ChatInputProps) {
         .filter((a) => mentionedNames.includes(a.name))
         .map((a) => a.id);
 
-      console.log("[send] resolved agent IDs", mentionedAgentIds);
-
       // Trigger all mentioned agents simultaneously
       if (mentionedAgentIds.length > 0) {
         const triggerPromises = mentionedAgentIds.map(async (agentId) => {
@@ -161,7 +172,7 @@ export function ChatInput(props: ChatInputProps) {
           await writeTransaction(async (tx) => {
             await tx.execute(
               `INSERT INTO messages (id, channel_id, author_type, author_id, content, created_at)
-               VALUES (?, ?, 'agent', ?, ?, ?)`,
+             VALUES (?, ?, 'agent', ?, ?, ?)`,
               [
                 agentMessageId,
                 props.channelId,
@@ -174,7 +185,6 @@ export function ChatInput(props: ChatInputProps) {
 
           // Call server function to process agent response
           // Server will query channel history and write directly to Neon, PowerSync will sync it back
-          console.log("[send] Calling processAgentResponse for agent", agentId);
           return processAgentResponse(
             props.channelId,
             agentId,
@@ -187,7 +197,6 @@ export function ChatInput(props: ChatInputProps) {
 
         // Wait for all agents to complete
         await Promise.all(triggerPromises);
-        console.log("[send] All agent processing complete");
       }
     } catch (error: unknown) {
       console.error("[send] error", error);

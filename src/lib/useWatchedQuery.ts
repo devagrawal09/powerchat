@@ -26,6 +26,7 @@ export function useWatchedQuery<T = unknown>(
       try {
         const db = await getPowerSync();
         for await (const result of db.watch(currentSql, currentParams)) {
+          console.log("watch result", result);
           if (cancelled) break;
           const rows = (result?.rows?._array ?? []) as T[];
           setState("data", reconcile(rows));
