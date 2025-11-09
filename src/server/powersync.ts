@@ -17,40 +17,32 @@ function base64urlToBytes(b64url: string): Uint8Array {
 
 // Token generation for PowerSync authentication
 export async function getPowerSyncToken() {
-  try {
-    console.log("[getPowerSyncToken] getPowerSyncToken");
-    const event = getRequestEvent();
-    if (!event) throw new Error("No request event");
+  const event = getRequestEvent();
+  if (!event) throw new Error("No request event");
 
-    const username = getCookie(event.nativeEvent, "pc_username");
-    if (!username) throw new Error("No session");
+  const username = getCookie(event.nativeEvent, "pc_username");
+  if (!username) throw new Error("No session");
 
-    const kid = process.env.POWERSYNC_JWT_KID;
-    const secretB64url = process.env.POWERSYNC_JWT_SECRET;
-    const instanceUrl = process.env.POWERSYNC_SERVICE_URL;
-    if (!kid || !secretB64url || !instanceUrl)
-      throw new Error(
-        "POWERSYNC_JWT_KID, POWERSYNC_JWT_SECRET, or POWERSYNC_SERVICE_URL not set"
-      );
+  const kid = process.env.POWERSYNC_JWT_KID;
+  const secretB64url = process.env.POWERSYNC_JWT_SECRET;
+  const instanceUrl = process.env.POWERSYNC_SERVICE_URL;
+  if (!kid || !secretB64url || !instanceUrl)
+    throw new Error(
+      "POWERSYNC_JWT_KID, POWERSYNC_JWT_SECRET, or POWERSYNC_SERVICE_URL not set"
+    );
 
-    const key = base64urlToBytes(secretB64url);
+  const key = base64urlToBytes(secretB64url);
 
-    const jwt = await new SignJWT({ sub: username, aud: instanceUrl })
-      .setProtectedHeader({ alg: "HS256", kid })
-      .setIssuedAt()
-      .setExpirationTime("15m")
-      .sign(key);
+  const jwt = await new SignJWT({ sub: username, aud: instanceUrl })
+    .setProtectedHeader({ alg: "HS256", kid })
+    .setIssuedAt()
+    .setExpirationTime("15m")
+    .sign(key);
 
-    console.log("[getPowerSyncToken] jwt", jwt);
-    console.log("[getPowerSyncToken] expiresAt", Date.now() + 15 * 60 * 1000);
-    return {
-      token: jwt,
-      expiresAt: Date.now() + 15 * 60 * 1000,
-    };
-  } catch (error: any) {
-    console.error("[getPowerSyncToken] error:", error);
-    throw error;
-  }
+  return {
+    token: jwt,
+    expiresAt: Date.now() + 15 * 60 * 1000,
+  };
 }
 
 // Upload data from PowerSync client to Neon

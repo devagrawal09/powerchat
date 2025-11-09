@@ -22,16 +22,25 @@ export const processAgentResponse = async (
   channelId: string,
   agentId: string,
   agentMessageId: string,
-  userMessage: string
+  userMessage: string,
+  triggeringUsername: string
 ) => {
   try {
     console.log("[agent] Processing agent response");
 
     // Query recent message history
     const messages = await query(
-      `SELECT author_type, content FROM messages 
-       WHERE channel_id = $1 
-       ORDER BY created_at ASC, id ASC 
+      `SELECT m.author_type, m.content,
+        CASE 
+          WHEN m.author_type = 'user' THEN u.id
+          WHEN m.author_type = 'agent' THEN a.name
+          WHEN m.author_type = 'system' THEN 'System'
+        END as author_name
+       FROM messages m
+       LEFT JOIN users u ON m.author_type = 'user' AND m.author_id = u.id
+       LEFT JOIN agents a ON m.author_type = 'agent' AND m.author_id = a.id::text
+       WHERE m.channel_id = $1 
+       ORDER BY m.created_at ASC, m.id ASC 
        LIMIT 30`,
       [channelId]
     );
@@ -39,20 +48,30 @@ export const processAgentResponse = async (
     const history = (messages.rows || [])
       .map((m) => ({
         role: m.author_type === "user" ? "user" : "assistant",
+        name: m.author_name,
         content: m.content,
       }))
+      .map((m) => JSON.stringify(m, null, 2))
       .join("\n");
 
     const input = `Channel: ${channelId}\n${history}\nUser: ${userMessage}`;
 
     const tools = await mcpClient.getTools();
 
+    // Build instructions with mention requirement
+    let instructions = "You are a helpful assistant in a chat channel.";
+    if (triggeringUsername) {
+      instructions += ` Always mention the user who triggered you by using @${triggeringUsername} in your response.`;
+    }
+
     const agent = new Agent({
       name: "channel-assistant",
-      instructions: "You are a helpful assistant in a chat channel.",
+      instructions,
       model: process.env.AI_MODEL || "openai/gpt-5",
       tools,
     });
+
+    console.log("[agent] input", input);
 
     const stream = await agent.stream(input);
 
@@ -65,24 +84,25 @@ export const processAgentResponse = async (
         if (ev.type === "text-delta") {
           acc += ev.payload?.text ?? "";
         } else if (ev.type === "tool-call") {
-          // const name = ev.payload?.toolName ?? "tool";
-          // const args = ev.payload?.args ?? {};
-          //           acc += `
-          // *Tool Call*
-          // Tool: ${name}
-          // ID: ${ev.payload?.toolCallId ?? ""}`;
+          const name = ev.payload?.toolName ?? "tool";
+          const args = ev.payload?.args ?? {};
+          acc += `\n\n**Tool Call: ${name}**`;
         } else if (ev.type === "tool-result") {
-          // const id = ev.payload?.toolCallId ?? "";
-          // const name = ev.payload?.toolName ?? "tool";
-          // const out =
-          //   ev.payload?.result ?? ev.payload?.result ?? ev.payload ?? null;
-          //           acc += `
-          // *Tool Result*
-          // Tool: ${name}
-          // ID: ${id}`;
+          const id = ev.payload?.toolCallId ?? "";
+          const name = ev.payload?.toolName ?? "tool";
+          acc += `\n\n**Tool Result: ${name}**`;
         } else if (ev.type === "reasoning-delta") {
           const t = ev.payload?.text ?? "";
           if (t) acc += t;
+        } else if (ev.type === "text-end") {
+          console.log("[agent] text end", ev);
+          acc += "\n\n";
+        } else if (ev.type === "step-finish") {
+          console.log("[agent] step finish", ev);
+          acc += "\n\n";
+        } else if (ev.type === "tool-output") {
+          console.log("[agent] tool output", ev);
+          acc += `\n\n*Tool Call Complete: ${ev.payload?.toolName ?? "tool"}*`;
         }
         // Skip lifecycle events silently
       } catch (e) {
@@ -103,23 +123,14 @@ export const processAgentResponse = async (
   } catch (error: any) {
     console.error("[agent] Failed to process agent response:", error);
 
-    // Insert error message into the database
-    const errorMessageId = crypto.randomUUID();
-    const errorMessageCreatedAt = new Date().toISOString();
+    // Update existing message with error
     try {
-      await query(
-        `INSERT INTO messages (id, channel_id, author_type, author_id, content, created_at)
-         VALUES ($1, $2, 'agent', $3, $4, $5)`,
-        [
-          errorMessageId,
-          channelId,
-          agentId,
-          `Error: ${error.message}`,
-          errorMessageCreatedAt,
-        ]
-      );
+      await query(`UPDATE messages SET content = $1 WHERE id = $2`, [
+        `Error: ${error.message}`,
+        agentMessageId,
+      ]);
     } catch (dbError) {
-      console.error("[agent] Failed to insert error message:", dbError);
+      console.error("[agent] Failed to update error message:", dbError);
     }
 
     return { success: false, error: error.message };

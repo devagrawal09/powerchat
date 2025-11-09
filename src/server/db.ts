@@ -25,7 +25,6 @@ export async function queryInternal(text: string, params?: any[]) {
 
 export async function query(text: string, params?: any[]) {
   "use server";
-  console.log("[query] text", text, params);
   const client = await getPool().connect();
   try {
     return await client.query(text, params);

@@ -1,4 +1,5 @@
 import { createSignal, Show } from "solid-js";
+import { useAction } from "@solidjs/router";
 import { inviteByUsername } from "~/server/actions";
 
 type ChannelInviteProps = {
@@ -12,6 +13,8 @@ export function ChannelInvite(props: ChannelInviteProps) {
     type: "success" | "error";
     text: string;
   } | null>(null);
+
+  const invite = useAction(inviteByUsername);
 
   const handleInvite = async (e: Event) => {
     e.preventDefault();
@@ -30,7 +33,12 @@ export function ChannelInvite(props: ChannelInviteProps) {
       formData.append("channelId", props.channelId);
       formData.append("username", value);
 
-      const result = await inviteByUsername(formData);
+      const result = await invite(formData);
+
+      if (!result) {
+        setMessage({ type: "error", text: "No response from server" });
+        return;
+      }
 
       if (result.error) {
         setMessage({ type: "error", text: result.error });
@@ -42,7 +50,7 @@ export function ChannelInvite(props: ChannelInviteProps) {
     } catch (err: any) {
       setMessage({
         type: "error",
-        text: err.message || "Failed to invite user",
+        text: err?.message || "Failed to invite user",
       });
     } finally {
       setSubmitting(false);

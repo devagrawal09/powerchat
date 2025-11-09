@@ -100,6 +100,7 @@ export function ChatInput(props: ChatInputProps) {
   const handleSend = async () => {
     const text = content().trim();
     if (!text) return;
+    setContent("");
 
     try {
       const messageId = crypto.randomUUID();
@@ -185,12 +186,11 @@ export function ChatInput(props: ChatInputProps) {
           props.channelId,
           agentId,
           agentMessageId,
-          text
+          text,
+          username
         );
         console.log("[send] Agent processing complete");
       }
-
-      setContent("");
     } catch (error: unknown) {
       console.error("[send] error", error);
       // Error will be handled by the server function

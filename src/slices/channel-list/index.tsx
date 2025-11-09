@@ -1,7 +1,8 @@
-import { For, Show } from "solid-js";
+import { For, Show, createMemo } from "solid-js";
 import { A } from "@solidjs/router";
 import { useWatchedQuery } from "~/lib/useWatchedQuery";
 import { DeleteChannel } from "~/slices/delete-channel";
+import { getUsername } from "~/lib/getUsername";
 
 type ChannelRow = {
   id: string;
@@ -11,12 +12,15 @@ type ChannelRow = {
 };
 
 export function ChannelList() {
+  const username = createMemo(() => getUsername());
+
   const channels = useWatchedQuery<ChannelRow>(
     () =>
       `SELECT c.* FROM channels c
        JOIN channel_members cm ON cm.channel_id = c.id
-       WHERE cm.member_type = 'user'
-       ORDER BY c.created_at DESC`
+       WHERE cm.member_type = 'user' AND cm.member_id = ?
+       ORDER BY c.created_at DESC`,
+    () => [username() || ""]
   );
 
   return (

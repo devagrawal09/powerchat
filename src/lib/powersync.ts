@@ -18,9 +18,6 @@ class PowerChatConnector implements PowerSyncBackendConnector {
     // Call server function directly - no HTTP overhead!
     const { token, expiresAt } = await getPowerSyncToken();
     const endpoint = import.meta.env.VITE_POWERSYNC_SERVICE_URL;
-    console.log("[fetchCredentials] endpoint", endpoint);
-    console.log("[fetchCredentials] token", token);
-    console.log("[fetchCredentials] expiresAt", expiresAt);
     return { endpoint, token, expiresAt: new Date(expiresAt) };
   }
 
