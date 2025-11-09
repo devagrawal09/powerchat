@@ -3,8 +3,9 @@ import { render, screen, fireEvent, waitFor } from "@solidjs/testing-library";
 import { ChannelInvite } from "./index";
 
 // Mock dependencies
-vi.mock("~/server/actions", () => ({
+vi.mock("./action", () => ({
   inviteByUsername: vi.fn(),
+  inviteAgent: vi.fn(),
 }));
 
 describe("ChannelInvite", () => {
@@ -32,7 +33,7 @@ describe("ChannelInvite", () => {
   });
 
   it("calls inviteByUsername with correct data", async () => {
-    const { inviteByUsername } = await import("~/server/actions");
+    const { inviteByUsername } = await import("./action");
     vi.mocked(inviteByUsername).mockResolvedValue({ success: true });
 
     render(() => <ChannelInvite channelId="test-channel-123" />);
@@ -53,7 +54,7 @@ describe("ChannelInvite", () => {
   });
 
   it("displays success message and clears input after successful invite", async () => {
-    const { inviteByUsername } = await import("~/server/actions");
+    const { inviteByUsername } = await import("./action");
     vi.mocked(inviteByUsername).mockResolvedValue({ success: true });
 
     render(() => <ChannelInvite channelId="test-channel" />);
@@ -74,7 +75,7 @@ describe("ChannelInvite", () => {
   });
 
   it("displays error message when invite fails", async () => {
-    const { inviteByUsername } = await import("~/server/actions");
+    const { inviteByUsername } = await import("./action");
     vi.mocked(inviteByUsername).mockResolvedValue({
       error: "User not found",
     });
@@ -93,7 +94,7 @@ describe("ChannelInvite", () => {
   });
 
   it("shows 'Adding...' while submitting", async () => {
-    const { inviteByUsername } = await import("~/server/actions");
+    const { inviteByUsername } = await import("./action");
     vi.mocked(inviteByUsername).mockImplementation(
       () =>
         new Promise((resolve) =>
@@ -115,7 +116,7 @@ describe("ChannelInvite", () => {
   });
 
   it("disables input and button while submitting", async () => {
-    const { inviteByUsername } = await import("~/server/actions");
+    const { inviteByUsername } = await import("./action");
     vi.mocked(inviteByUsername).mockImplementation(
       () =>
         new Promise((resolve) =>
@@ -157,7 +158,7 @@ describe("ChannelInvite", () => {
   });
 
   it("trims whitespace from username", async () => {
-    const { inviteByUsername } = await import("~/server/actions");
+    const { inviteByUsername } = await import("./action");
     vi.mocked(inviteByUsername).mockResolvedValue({ success: true });
 
     render(() => <ChannelInvite channelId="test-channel" />);
@@ -177,7 +178,7 @@ describe("ChannelInvite", () => {
   });
 
   it("handles exception from server", async () => {
-    const { inviteByUsername } = await import("~/server/actions");
+    const { inviteByUsername } = await import("./action");
     vi.mocked(inviteByUsername).mockRejectedValue(new Error("Network error"));
 
     render(() => <ChannelInvite channelId="test-channel" />);

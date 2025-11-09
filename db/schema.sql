@@ -14,8 +14,14 @@ CREATE TABLE IF NOT EXISTS agents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT UNIQUE NOT NULL,
   model_config JSONB NOT NULL DEFAULT '{}'::jsonb,
+  system_instructions TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Add columns to existing agents table if they don't exist
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS system_instructions TEXT NOT NULL DEFAULT '';
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
 
 -- Channels
 CREATE TABLE IF NOT EXISTS channels (

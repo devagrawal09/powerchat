@@ -9,7 +9,7 @@ vi.mock("~/lib/useWatchedQuery", () => ({
       {
         member_type: "agent",
         member_id: "00000000-0000-0000-0000-000000000001",
-        name: "assistant",
+        name: "Assistant",
       },
     ],
     loading: false,
@@ -32,7 +32,7 @@ describe("MentionAutocomplete", () => {
         onActiveIndexChange={vi.fn()}
       />
     ));
-    expect(screen.queryByText("@assistant")).not.toBeInTheDocument();
+    expect(screen.queryByText("@Assistant")).not.toBeInTheDocument();
   });
 
   it("renders filtered options when open", () => {
@@ -46,7 +46,7 @@ describe("MentionAutocomplete", () => {
         onActiveIndexChange={vi.fn()}
       />
     ));
-    expect(screen.getByText("@assistant")).toBeInTheDocument();
+    expect(screen.getByText("@Assistant")).toBeInTheDocument();
     expect(screen.queryByText("@alice")).not.toBeInTheDocument();
   });
 
@@ -63,10 +63,10 @@ describe("MentionAutocomplete", () => {
       />
     ));
 
-    const button = screen.getByText("@assistant").closest("button");
+    const button = screen.getByText("@Assistant").closest("button");
     fireEvent.mouseDown(button!);
 
-    expect(onSelect).toHaveBeenCalledWith("assistant");
+    expect(onSelect).toHaveBeenCalledWith("Assistant");
   });
 
   it("calls onActiveIndexChange on hover", () => {

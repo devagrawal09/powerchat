@@ -15,7 +15,7 @@ vi.mock("~/lib/useWatchedQuery", () => ({
         {
           member_type: "agent",
           member_id: "00000000-0000-0000-0000-000000000001",
-          name: "assistant",
+          name: "Assistant",
         },
       ],
       loading: false,
@@ -42,6 +42,6 @@ describe("ChannelMemberList", () => {
 
   it("displays agent members", () => {
     render(() => <ChannelMemberList channelId="test-channel" />);
-    expect(screen.getByText("assistant")).toBeInTheDocument();
+    expect(screen.getByText("Assistant")).toBeInTheDocument();
   });
 });

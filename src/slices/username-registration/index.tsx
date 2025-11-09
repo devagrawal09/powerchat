@@ -1,6 +1,6 @@
 import { createSignal, Show } from "solid-js";
 import { useAction, useSubmission } from "@solidjs/router";
-import { registerUsername } from "~/server/actions";
+import { registerUsername } from "./action";
 
 export function UsernameRegistration(props: {
   onSuccess: (username: string) => void;

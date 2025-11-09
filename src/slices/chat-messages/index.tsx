@@ -29,11 +29,7 @@ export function ChatMessages(props: ChatMessagesProps) {
       `SELECT m.*, 
         CASE 
           WHEN m.author_type = 'user' THEN u.id
-          WHEN m.author_type = 'agent' THEN COALESCE(a.name, 
-            CASE 
-              WHEN m.author_id = '00000000-0000-0000-0000-000000000001' THEN 'assistant'
-              ELSE 'Agent'
-            END)
+          WHEN m.author_type = 'agent' THEN COALESCE(a.name, 'Agent')
           WHEN m.author_type = 'system' THEN 'System'
         END as author_name
        FROM messages m

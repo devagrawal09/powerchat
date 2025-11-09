@@ -27,7 +27,7 @@ export function ChannelMemberList(props: ChannelMemberListProps) {
   const agents = useWatchedQuery<MemberRow>(
     () =>
       `SELECT 'agent' as member_type, cm.member_id as member_id,
-              COALESCE(a.name, CASE WHEN cm.member_id = '00000000-0000-0000-0000-000000000001' THEN 'assistant' ELSE 'Agent' END) as name
+              COALESCE(a.name, 'Agent') as name
        FROM channel_members cm
        LEFT JOIN agents a ON cm.member_type = 'agent' AND a.id = cm.member_id
        WHERE cm.channel_id = ? AND cm.member_type = 'agent'
@@ -55,16 +55,9 @@ export function ChannelMemberList(props: ChannelMemberListProps) {
       </div>
       <Show when={!agents.loading}>
         <For each={agents.data}>
-          {(member) => {
-            return (
-              <div class="text-sm text-gray-900 py-1">
-                {member.name ||
-                  (member.member_id === "00000000-0000-0000-0000-000000000001"
-                    ? "assistant"
-                    : "Agent")}
-              </div>
-            );
-          }}
+          {(member) => (
+            <div class="text-sm text-gray-900 py-1">{member.name}</div>
+          )}
         </For>
       </Show>
     </aside>

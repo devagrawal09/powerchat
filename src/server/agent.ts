@@ -23,10 +23,49 @@ export const processAgentResponse = async (
   agentId: string,
   agentMessageId: string,
   userMessage: string,
-  triggeringUsername: string
+  triggeringUsername: string,
+  depth: number = 0
 ) => {
   try {
-    console.log("[agent] Processing agent response");
+    console.log("[agent] Processing agent response", { agentId, depth });
+
+    // Stop if max depth reached
+    if (depth >= 5) {
+      await query(`UPDATE messages SET content = $1 WHERE id = $2`, [
+        "Maximum collaboration depth reached (5).",
+        agentMessageId,
+      ]);
+      return { success: true, agentMessageId };
+    }
+
+    // Get agent info (system instructions and name)
+    const agentInfo = await query(
+      `SELECT name, system_instructions FROM agents WHERE id = $1`,
+      [agentId]
+    );
+    const agentName = agentInfo.rows[0]?.name || "Agent";
+    const systemInstructions = agentInfo.rows[0]?.system_instructions || "";
+
+    // Get all agents in the channel with their descriptions
+    const channelAgents = await query(
+      `SELECT a.id, a.name, a.description 
+       FROM agents a
+       JOIN channel_members cm ON cm.member_id = a.id::text AND cm.member_type = 'agent'
+       WHERE cm.channel_id = $1 AND a.id::text != $2
+       ORDER BY a.name`,
+      [channelId, agentId]
+    );
+
+    // Build agent context for instructions
+    let agentContext = "";
+    if (channelAgents.rows.length > 0) {
+      agentContext = "\n\nOther agents in this channel:\n";
+      for (const agent of channelAgents.rows) {
+        agentContext += `- @${agent.name}: ${agent.description}\n`;
+      }
+      agentContext +=
+        "\nYou can mention other agents using @agentname to collaborate with them.";
+    }
 
     // Query recent message history
     const messages = await query(
@@ -58,14 +97,16 @@ export const processAgentResponse = async (
 
     const tools = await mcpClient.getTools();
 
-    // Build instructions with mention requirement
-    let instructions = "You are a helpful assistant in a chat channel.";
+    // Build instructions with agent context
+    let instructions =
+      systemInstructions || "You are a helpful assistant in a chat channel.";
     if (triggeringUsername) {
       instructions += ` Always mention the user who triggered you by using @${triggeringUsername} in your response.`;
     }
+    instructions += agentContext;
 
     const agent = new Agent({
-      name: "channel-assistant",
+      name: agentName,
       instructions,
       model: process.env.AI_MODEL || "openai/gpt-5",
       tools,
@@ -119,6 +160,57 @@ export const processAgentResponse = async (
     }
 
     console.log("[agent] Agent response complete");
+
+    // Parse response for @mentions of other agents
+    const mentionedNames = Array.from(acc.matchAll(/@([a-z0-9_]+)/gi)).map(
+      (m) => m[1].toLowerCase()
+    );
+
+    // Find mentioned agent IDs
+    const mentionedAgentIds: string[] = [];
+    for (const agentRow of channelAgents.rows) {
+      if (mentionedNames.includes(agentRow.name.toLowerCase())) {
+        mentionedAgentIds.push(agentRow.id);
+      }
+    }
+
+    // Trigger all mentioned agents simultaneously
+    if (mentionedAgentIds.length > 0) {
+      console.log("[agent] Triggering mentioned agents", mentionedAgentIds);
+
+      const triggerPromises = mentionedAgentIds.map(
+        async (mentionedAgentId) => {
+          const newAgentMessageId = crypto.randomUUID();
+          const agentMessageCreatedAt = new Date().toISOString();
+
+          // Insert placeholder "Thinking..." message
+          await query(
+            `INSERT INTO messages (id, channel_id, author_type, author_id, content, created_at) VALUES ($1, $2, 'agent', $3, $4, $5)`,
+            [
+              newAgentMessageId,
+              channelId,
+              mentionedAgentId,
+              "Thinking...",
+              agentMessageCreatedAt,
+            ]
+          );
+
+          // Trigger agent response
+          return processAgentResponse(
+            channelId,
+            mentionedAgentId,
+            newAgentMessageId,
+            acc, // Use the agent's response as the trigger message
+            agentName, // The triggering agent's name
+            depth + 1
+          );
+        }
+      );
+
+      // Wait for all agents to complete
+      await Promise.all(triggerPromises);
+    }
+
     return { success: true, agentMessageId };
   } catch (error: any) {
     console.error("[agent] Failed to process agent response:", error);

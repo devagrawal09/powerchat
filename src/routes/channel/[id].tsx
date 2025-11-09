@@ -5,6 +5,7 @@ import { ChatInput } from "~/slices/chat-input";
 import { ChannelMemberList } from "~/slices/channel-member-list";
 import { ChannelInvite } from "~/slices/channel-invite";
 import { ChannelHeader } from "~/slices/channel-header";
+import { CreateAgent } from "~/slices/create-agent";
 
 export default function ChannelPage() {
   const params = useParams();
@@ -24,6 +25,7 @@ export default function ChannelPage() {
         <div class="flex-1 overflow-y-auto">
           <ChannelMemberList channelId={params.id} />
         </div>
+        <CreateAgent channelId={params.id} />
         <div class="p-4 border-t border-gray-200">
           <ChannelInvite channelId={params.id} />
         </div>

@@ -22,7 +22,7 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
       `SELECT cm.member_type, cm.member_id,
               CASE 
                 WHEN cm.member_type = 'user' THEN COALESCE(u.id, cm.member_id)
-                WHEN cm.member_type = 'agent' THEN COALESCE(a.name, CASE WHEN cm.member_id = '00000000-0000-0000-0000-000000000001' THEN 'assistant' ELSE 'Agent' END)
+                WHEN cm.member_type = 'agent' THEN COALESCE(a.name, 'Agent')
                 ELSE cm.member_id
               END AS name
        FROM channel_members cm
@@ -52,15 +52,13 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
   // Filtered mention options
   const mentionOptions = createMemo(() => {
     const q = props.mentionQuery.toLowerCase();
-    const list = (members.data || []).map((m) => ({
-      type: m.member_type,
-      id: m.member_id,
-      name:
-        m.name ||
-        (m.member_id === "00000000-0000-0000-0000-000000000001"
-          ? "assistant"
-          : "user"),
-    }));
+    const list = (members.data || [])
+      .filter((m) => m.name)
+      .map((m) => ({
+        type: m.member_type,
+        id: m.member_id,
+        name: m.name!,
+      }));
     const filtered = list.filter((o) => fuzzyMatch(o.name, q));
     return filtered;
   });

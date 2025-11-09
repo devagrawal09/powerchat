@@ -42,7 +42,7 @@ export function ChatInput(props: ChatInputProps) {
       `SELECT cm.member_type, cm.member_id,
               CASE 
                 WHEN cm.member_type = 'user' THEN COALESCE(u.id, cm.member_id)
-                WHEN cm.member_type = 'agent' THEN COALESCE(a.name, CASE WHEN cm.member_id = '00000000-0000-0000-0000-000000000001' THEN 'assistant' ELSE 'Agent' END)
+                WHEN cm.member_type = 'agent' THEN COALESCE(a.name, 'Agent')
                 ELSE cm.member_id
               END AS name
        FROM channel_members cm
@@ -73,15 +73,13 @@ export function ChatInput(props: ChatInputProps) {
   const mentionOptions = createMemo(() => {
     const state = mentionState();
     const q = state.query.toLowerCase();
-    const list = (members.data || []).map((m) => ({
-      type: m.member_type,
-      id: m.member_id,
-      name:
-        m.name ||
-        (m.member_id === "00000000-0000-0000-0000-000000000001"
-          ? "assistant"
-          : "user"),
-    }));
+    const list = (members.data || [])
+      .filter((m) => m.name)
+      .map((m) => ({
+        type: m.member_type,
+        id: m.member_id,
+        name: m.name!,
+      }));
     return list.filter((o) => fuzzyMatch(o.name, q));
   });
 
@@ -141,15 +139,10 @@ export function ChatInput(props: ChatInputProps) {
       // Note: This duplication of member name resolution is acceptable per VSA principles.
       // Each slice maintains independence. If duplicated a third time, extract to shared utility.
       const agentMembers = (members.data || [])
-        .filter((m) => m.member_type === "agent")
+        .filter((m) => m.member_type === "agent" && m.name)
         .map((m) => ({
           id: m.member_id,
-          name: (
-            m.name ||
-            (m.member_id === "00000000-0000-0000-0000-000000000001"
-              ? "assistant"
-              : "agent")
-          ).toLowerCase(),
+          name: m.name!.toLowerCase(),
         }));
 
       const mentionedAgentIds = agentMembers
@@ -158,38 +151,43 @@ export function ChatInput(props: ChatInputProps) {
 
       console.log("[send] resolved agent IDs", mentionedAgentIds);
 
-      // Trigger agent if mentioned
+      // Trigger all mentioned agents simultaneously
       if (mentionedAgentIds.length > 0) {
-        const agentId = mentionedAgentIds[0];
-        const agentMessageId = crypto.randomUUID();
-        const agentMessageCreatedAt = new Date().toISOString();
+        const triggerPromises = mentionedAgentIds.map(async (agentId) => {
+          const agentMessageId = crypto.randomUUID();
+          const agentMessageCreatedAt = new Date().toISOString();
 
-        // Insert placeholder "Thinking..." message
-        await writeTransaction(async (tx) => {
-          await tx.execute(
-            `INSERT INTO messages (id, channel_id, author_type, author_id, content, created_at)
-             VALUES (?, ?, 'agent', ?, ?, ?)`,
-            [
-              agentMessageId,
-              props.channelId,
-              agentId,
-              "Thinking...",
-              agentMessageCreatedAt,
-            ]
+          // Insert placeholder "Thinking..." message
+          await writeTransaction(async (tx) => {
+            await tx.execute(
+              `INSERT INTO messages (id, channel_id, author_type, author_id, content, created_at)
+               VALUES (?, ?, 'agent', ?, ?, ?)`,
+              [
+                agentMessageId,
+                props.channelId,
+                agentId,
+                "Thinking...",
+                agentMessageCreatedAt,
+              ]
+            );
+          });
+
+          // Call server function to process agent response
+          // Server will query channel history and write directly to Neon, PowerSync will sync it back
+          console.log("[send] Calling processAgentResponse for agent", agentId);
+          return processAgentResponse(
+            props.channelId,
+            agentId,
+            agentMessageId,
+            text,
+            username,
+            0 // depth starts at 0 for user-triggered agents
           );
         });
 
-        // Call server function to process agent response
-        // Server will query channel history and write directly to Neon, PowerSync will sync it back
-        console.log("[send] Calling processAgentResponse");
-        await processAgentResponse(
-          props.channelId,
-          agentId,
-          agentMessageId,
-          text,
-          username
-        );
-        console.log("[send] Agent processing complete");
+        // Wait for all agents to complete
+        await Promise.all(triggerPromises);
+        console.log("[send] All agent processing complete");
       }
     } catch (error: unknown) {
       console.error("[send] error", error);

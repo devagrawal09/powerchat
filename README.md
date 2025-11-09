@@ -33,7 +33,7 @@ The database has already been created and seeded via Neon MCP:
 - Project: `powerchat` (ID: `morning-tree-55202603`)
 - Database: `neondb`
 - Tables: `users`, `agents`, `channels`, `channel_members`, `messages`, `message_mentions`
-- Demo agent: `assistant` (ID: `00000000-0000-0000-0000-000000000001`)
+- Demo agent: `Assistant` (ID: `00000000-0000-0000-0000-000000000001`)
 
 Connection string is in `env.md`.
 
@@ -74,10 +74,10 @@ Visit `http://localhost:3000`
 ## Usage
 
 1. **Create a Channel**: Use the form in the sidebar
-2. **Invite an Agent**: Use the agent ID `00000000-0000-0000-0000-000000000001` (name: `assistant`)
+2. **Invite an Agent**: Use the agent ID `00000000-0000-0000-0000-000000000001` (name: `Assistant`)
    - In a channel, you'd need an invite UI or do it manually via SQL for MVP
 3. **Send Messages**: Type in the input box
-4. **Mention Agent**: Use `@assistant` in your message to trigger AI reply
+4. **Mention Agent**: Use `@Assistant` in your message to trigger AI reply
 
 ## Architecture
 

@@ -20,7 +20,7 @@ const mockMessages = [
     author_id: "00000000-0000-0000-0000-000000000001",
     content: "Hello! How can I help?",
     created_at: "2024-01-01T10:01:00.000Z",
-    author_name: "assistant",
+    author_name: "Assistant",
   },
   {
     id: "msg-3",
@@ -63,7 +63,7 @@ describe("ChatMessages", () => {
     render(() => <ChatMessages channelId="channel-1" />);
 
     expect(screen.getByText("user-1")).toBeInTheDocument();
-    expect(screen.getByText("assistant")).toBeInTheDocument();
+    expect(screen.getByText("Assistant")).toBeInTheDocument();
     expect(screen.getByText("System")).toBeInTheDocument();
   });
 
@@ -73,7 +73,7 @@ describe("ChatMessages", () => {
     const avatars = screen.getAllByText(/^[UAS]$/);
     expect(avatars).toHaveLength(3);
     expect(avatars[0]).toHaveTextContent("U"); // user-1
-    expect(avatars[1]).toHaveTextContent("A"); // assistant
+    expect(avatars[1]).toHaveTextContent("A"); // Assistant
     expect(avatars[2]).toHaveTextContent("S"); // System
   });
 

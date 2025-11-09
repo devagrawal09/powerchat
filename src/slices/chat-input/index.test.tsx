@@ -21,7 +21,7 @@ vi.mock("~/lib/useWatchedQuery", () => ({
       {
         member_type: "agent",
         member_id: "00000000-0000-0000-0000-000000000001",
-        name: "assistant",
+        name: "Assistant",
       },
     ],
     loading: false,
@@ -91,7 +91,7 @@ describe("ChatInput", () => {
     const input = screen.getByPlaceholderText(/Message #/);
     const button = screen.getByText("Send");
 
-    fireEvent.input(input, { target: { value: "Hey @assistant help me" } });
+    fireEvent.input(input, { target: { value: "Hey @Assistant help me" } });
     fireEvent.click(button);
 
     // Wait for async operations
