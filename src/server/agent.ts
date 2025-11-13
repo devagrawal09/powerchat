@@ -113,15 +113,7 @@ export const processAgentResponse = async (
     // Get tools based on agent capabilities
     // Only research-oriented agents get Firecrawl tools
     // Assistant should coordinate/delegate, not do research itself
-    const allTools = await mcpClient.getTools();
-    const agentNameLower = agentName.toLowerCase();
-
-    // Agents that should have Firecrawl access
-    const researchAgents = ["researcher", "analyst", "writer"];
-    const hasResearchAccess = researchAgents.includes(agentNameLower);
-
-    // Filter tools: Assistant gets no tools, research agents get Firecrawl tools
-    const tools = hasResearchAccess ? allTools : []; // Assistant and other non-research agents get no tools
+    const tools = await mcpClient.getTools();
 
     // Build instructions with agent context
     let instructions =
@@ -133,16 +125,6 @@ export const processAgentResponse = async (
       instructions += `: ${agentDescription}`;
     }
     instructions += `.`;
-
-    // Add tool usage instructions for research agents
-    if (hasResearchAccess) {
-      instructions += `\n\nCRITICAL: After using tools to gather information, you MUST provide a clear, comprehensive text summary of your findings. Your response must end with actual written text explaining what you found, not just tool calls. Do not end your response until you have provided a written summary.`;
-    }
-
-    // // Add tool availability context
-    // if (!hasResearchAccess) {
-    //   instructions += `\n\nIMPORTANT: You do not have access to web research tools. When research, analysis, or data gathering is needed, you must delegate to specialized agents who have these capabilities.`;
-    // }
 
     if (triggeringUsername) {
       instructions += ` Always mention the user who triggered you by using @${triggeringUsername} in your response.`;

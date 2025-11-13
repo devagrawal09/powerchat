@@ -10,7 +10,12 @@ type MessageRow = {
   author_id: string;
   content: string;
   created_at: string;
-  author_name?: string | null;
+};
+
+type MemberRow = {
+  member_type: "user" | "agent";
+  member_id: string;
+  name: string | null;
 };
 
 type ChatMessagesProps = {
@@ -20,25 +25,50 @@ type ChatMessagesProps = {
 export function ChatMessages(props: ChatMessagesProps) {
   let scrollContainer: HTMLDivElement | undefined;
 
-  // Query messages with author name resolution
-  // Note: This author name resolution logic (CASE statement) is duplicated in chat-input/index.tsx.
-  // This is acceptable per VSA principles (slice independence). Each slice maintains its own logic.
-  // If duplicated a third time, consider extracting to shared utility lib/getAuthorName.ts
+  // Query messages without JOINs - enables trigger-based diffs later
   const messages = useWatchedQuery<MessageRow>(
     () =>
-      `SELECT m.*, 
-        CASE 
-          WHEN m.author_type = 'user' THEN u.id
-          WHEN m.author_type = 'agent' THEN COALESCE(a.name, 'Agent')
-          WHEN m.author_type = 'system' THEN 'System'
-        END as author_name
-       FROM messages m
-       LEFT JOIN users u ON m.author_type = 'user' AND m.author_id = u.id
-       LEFT JOIN agents a ON m.author_type = 'agent' AND m.author_id = a.id
-       WHERE m.channel_id = ?
-       ORDER BY m.created_at ASC, m.id ASC`,
+      `SELECT * 
+       FROM messages 
+       WHERE channel_id = ?
+       ORDER BY created_at ASC, id ASC`,
     () => [props.channelId]
   );
+
+  // Query channel members separately for author name lookup
+  const members = useWatchedQuery<MemberRow>(
+    () =>
+      `SELECT cm.member_type, cm.member_id,
+              CASE 
+                WHEN cm.member_type = 'user' THEN COALESCE(u.id, cm.member_id)
+                WHEN cm.member_type = 'agent' THEN COALESCE(a.name, 'Agent')
+                ELSE cm.member_id
+              END AS name
+       FROM channel_members cm
+       LEFT JOIN users u ON cm.member_type = 'user' AND u.id = cm.member_id
+       LEFT JOIN agents a ON cm.member_type = 'agent' AND a.id = cm.member_id
+       WHERE cm.channel_id = ?`,
+    () => [props.channelId]
+  );
+
+  // Create lookup map: (author_type, author_id) -> name
+  const authorNameMap = createMemo(() => {
+    const map = new Map<string, string>();
+    (members.data || []).forEach((member) => {
+      const key = `${member.member_type}:${member.member_id}`;
+      map.set(key, member.name || member.member_id);
+    });
+    return map;
+  });
+
+  // Helper to get author name
+  const getAuthorName = (message: MessageRow): string => {
+    if (message.author_type === "system") {
+      return "System";
+    }
+    const key = `${message.author_type}:${message.author_id}`;
+    return authorNameMap().get(key) || message.author_id;
+  };
 
   createEffect(() => {
     const m = JSON.stringify(messages.data, null, 2);
@@ -94,6 +124,7 @@ export function ChatMessages(props: ChatMessagesProps) {
         >
           <For each={messages.data}>
             {(message) => {
+              const authorName = createMemo(() => getAuthorName(message));
               const mentioned = createMemo(() => isMentioned(message.content));
               return (
                 <div
@@ -102,12 +133,12 @@ export function ChatMessages(props: ChatMessagesProps) {
                   }`}
                 >
                   <div class="shrink-0 w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-xs font-semibold text-gray-700">
-                    {message.author_name?.[0]?.toUpperCase() || "?"}
+                    {authorName()?.[0]?.toUpperCase() || "?"}
                   </div>
                   <div class="flex-1">
                     <div class="flex items-baseline gap-2">
                       <span class="font-semibold text-sm text-gray-900">
-                        {message.author_name || "Unknown"}
+                        {authorName()}
                       </span>
                       <span class="text-xs text-gray-500">
                         {new Date(message.created_at).toLocaleTimeString()}

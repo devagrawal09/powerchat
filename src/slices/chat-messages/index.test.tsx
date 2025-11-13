@@ -149,7 +149,7 @@ describe("ChatMessages", () => {
 
     // Check that the query parameters function returns the correct channel ID
     const paramsFunction = call[1];
-    expect(paramsFunction()).toEqual(["test-channel-123"]);
+    expect(paramsFunction?.()).toEqual(["test-channel-123"]);
   });
 
   it("orders messages by created_at and id", async () => {
