@@ -7,9 +7,16 @@ type MemberRow = {
   name: string | null;
 };
 
+type DocumentRow = {
+  id: string;
+  title: string;
+  description: string;
+};
+
 type MentionAutocompleteProps = {
   channelId: string;
   mentionQuery: string;
+  mentionType: "@" | "#";
   isOpen: boolean;
   activeIndex: number;
   onSelect: (name: string) => void;
@@ -33,6 +40,15 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
     () => [props.channelId]
   );
 
+  const documents = useWatchedQuery<DocumentRow>(
+    () =>
+      `SELECT id, title, description 
+       FROM documents 
+       WHERE channel_id = ? 
+       ORDER BY created_at DESC`,
+    () => [props.channelId]
+  );
+
   // Fuzzy search utility
   function fuzzyMatch(text: string, query: string): boolean {
     if (!query) return true;
@@ -52,15 +68,26 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
   // Filtered mention options
   const mentionOptions = createMemo(() => {
     const q = props.mentionQuery.toLowerCase();
-    const list = (members.data || [])
-      .filter((m) => m.name)
-      .map((m) => ({
-      type: m.member_type,
-      id: m.member_id,
-        name: m.name!,
-    }));
-    const filtered = list.filter((o) => fuzzyMatch(o.name, q));
-    return filtered;
+
+    if (props.mentionType === "#") {
+      // Document mentions
+      const list = (documents.data || []).map((d) => ({
+        type: "document" as const,
+        id: d.id,
+        name: d.title,
+      }));
+      return list.filter((o) => fuzzyMatch(o.name, q));
+    } else {
+      // Member mentions
+      const list = (members.data || [])
+        .filter((m) => m.name)
+        .map((m) => ({
+          type: m.member_type,
+          id: m.member_id,
+          name: m.name!,
+        }));
+      return list.filter((o) => fuzzyMatch(o.name, q));
+    }
   });
 
   return (
@@ -82,7 +109,10 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
               <span class="text-xs uppercase text-gray-500 mr-2">
                 {opt.type}
               </span>
-              <span class="text-gray-900">@{opt.name}</span>
+              <span class="text-gray-900">
+                {props.mentionType === "#" ? "#" : "@"}
+                {opt.name}
+              </span>
             </button>
           )}
         </For>

@@ -51,7 +51,18 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Documents (markdown content scoped to channels)
+CREATE TABLE IF NOT EXISTS documents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_channel_members_member ON channel_members (member_type, member_id);
 CREATE INDEX IF NOT EXISTS idx_messages_channel_time ON messages (channel_id, created_at, id);
 CREATE INDEX IF NOT EXISTS idx_messages_author ON messages (author_type, author_id);
+CREATE INDEX IF NOT EXISTS idx_documents_channel ON documents (channel_id);

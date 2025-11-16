@@ -2,6 +2,7 @@ import { For, Show, createMemo, createEffect } from "solid-js";
 import { useWatchedQuery } from "~/lib/useWatchedQuery";
 import { RenderMarkdown } from "~/components/Markdown";
 import { getUsername } from "~/lib/getUsername";
+import { writeTransaction } from "~/lib/powersync";
 
 type MessageRow = {
   id: string;
@@ -109,6 +110,23 @@ export function ChatMessages(props: ChatMessagesProps) {
     return mentions.includes(normalizedUsername);
   };
 
+  // Check if message belongs to current user
+  const isOwnMessage = (message: MessageRow) => {
+    const username = currentUsername();
+    return (
+      message.author_type === "user" &&
+      username !== null &&
+      message.author_id === username
+    );
+  };
+
+  // Delete message handler
+  const handleDeleteMessage = async (messageId: string) => {
+    await writeTransaction(async (tx) => {
+      await tx.execute("DELETE FROM messages WHERE id = ?", [messageId]);
+    });
+  };
+
   return (
     <div
       ref={scrollContainer}
@@ -126,9 +144,10 @@ export function ChatMessages(props: ChatMessagesProps) {
             {(message) => {
               const authorName = createMemo(() => getAuthorName(message));
               const mentioned = createMemo(() => isMentioned(message.content));
+
               return (
                 <div
-                  class={`flex gap-3 p-2 rounded-lg ${
+                  class={`group flex gap-3 p-2 rounded-lg ${
                     mentioned() ? "bg-blue-50 border-l-4 border-blue-400" : ""
                   }`}
                 >
@@ -136,13 +155,27 @@ export function ChatMessages(props: ChatMessagesProps) {
                     {authorName()?.[0]?.toUpperCase() || "?"}
                   </div>
                   <div class="flex-1">
-                    <div class="flex items-baseline gap-2">
-                      <span class="font-semibold text-sm text-gray-900">
-                        {authorName()}
-                      </span>
-                      <span class="text-xs text-gray-500">
-                        {new Date(message.created_at).toLocaleTimeString()}
-                      </span>
+                    <div class="flex items-baseline gap-2 justify-between">
+                      <div class="flex items-baseline gap-2">
+                        <span class="font-semibold text-sm text-gray-900">
+                          {authorName()}
+                        </span>
+                        <span class="text-xs text-gray-500">
+                          {new Date(message.created_at).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        class="text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 focus:opacity-100 text-xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          handleDeleteMessage(message.id);
+                        }}
+                        aria-label="Delete message"
+                      >
+                        ×
+                      </button>
                     </div>
                     <div class="text-sm mt-1 text-gray-900">
                       <RenderMarkdown>{message.content}</RenderMarkdown>

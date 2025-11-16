@@ -2,6 +2,9 @@
 import { Agent } from "@mastra/core/agent";
 import { MCPClient } from "@mastra/mcp";
 import { query } from "./db";
+import { listDocuments, createDocument, readDocument } from "./tools/documents";
+import { writeFile, mkdir } from "fs/promises";
+import { join } from "path";
 
 // Create Mastra agent
 // Prefer a hosted Firecrawl MCP server via FIRECRAWL_MCP_URL; fallback to npx
@@ -57,29 +60,40 @@ export const processAgentResponse = async (
       [channelId, agentId]
     );
 
+    // Get all documents in the channel
+    const channelDocuments = await query(
+      `SELECT id, title, description 
+       FROM documents 
+       WHERE channel_id = $1 
+       ORDER BY created_at DESC`,
+      [channelId]
+    );
+
     // Build agent context for instructions
     let agentContext = "";
     if (channelAgents.rows.length > 0) {
-      agentContext = "\n\nOther agents in this channel:\n";
+      agentContext = "\n\nOther agents available in this channel:\n";
       for (const agent of channelAgents.rows) {
         agentContext += `- @${agent.name}: ${agent.description}\n`;
       }
       agentContext +=
-        "\n\nIMPORTANT DELEGATION RULES:\n" +
-        "- ONLY use @agentname when you explicitly want to DELEGATE a task and trigger that agent to respond\n" +
-        "- When merely describing, discussing, or explaining what an agent does, use their plain name WITHOUT the @ symbol\n" +
-        "- Examples:\n" +
-        '  ✓ CORRECT: "The researcher agent specializes in gathering information..."\n' +
-        '  ✓ CORRECT: "You could ask researcher to analyze this data."\n' +
-        '  ✗ WRONG: "The @researcher agent specializes in..." (this would trigger researcher)\n' +
-        '  ✓ CORRECT (delegation): "@researcher Can you analyze this dataset?" (this SHOULD trigger researcher)\n' +
-        "- Use @mentions sparingly and only when you truly need another agent to take action\n" +
-        "- SEQUENTIAL vs PARALLEL DELEGATION:\n" +
-        "  • Do NOT mention multiple agents at once unless their tasks are completely independent and can run in parallel\n" +
-        "  • If tasks depend on each other (e.g., analysis depends on research, writing depends on analysis), delegate sequentially:\n" +
-        "    ✓ CORRECT: First mention @researcher, wait for their response, then mention @analyst\n" +
-        "    ✗ WRONG: Mentioning @researcher @analyst @writer all at once when they depend on each other\n" +
-        "  • Only mention multiple agents simultaneously if their tasks are truly independent (e.g., researching different unrelated topics)";
+        "\n\nGUIDELINES:\n" +
+        "- Delegate to other agents using @agentname when their expertise matches the task\n" +
+        "- Use @agentname ONLY for immediate delegation; use plain names for future mentions\n" +
+        "- Delegate sequentially (one @mention at a time) when tasks depend on each other\n" +
+        "- Keep responses concise (2-4 sentences); use documents for detailed content\n" +
+        "- Create documents for long-form content and reference them with #title\n" +
+        "- When delegating, create documents to transfer knowledge and context";
+    }
+
+    // Add documents context
+    if (channelDocuments.rows.length > 0) {
+      agentContext += "\n\nDocuments available in this channel:\n";
+      for (const doc of channelDocuments.rows) {
+        agentContext += `- #${doc.title}: ${doc.description}\n`;
+      }
+      agentContext +=
+        "\nYou can reference these documents using #title format in your responses.";
     }
 
     // Query recent message history
@@ -110,10 +124,24 @@ export const processAgentResponse = async (
 
     const input = `Channel: ${channelId}\n${history}\nUser: ${userMessage}`;
 
-    // Get tools based on agent capabilities
-    // Only research-oriented agents get Firecrawl tools
-    // Assistant should coordinate/delegate, not do research itself
-    const tools = await mcpClient.getTools();
+    // Only provide firecrawl tools to the researcher agent
+    let mcpTools = {};
+    if (agentName.toLowerCase() === "researcher") {
+      const allMcpTools = await mcpClient.getTools();
+      // Filter to only include firecrawl tools
+      mcpTools = Object.fromEntries(
+        Object.entries(allMcpTools).filter(([key]) =>
+          key.startsWith("firecrawl_")
+        )
+      );
+    }
+
+    const tools = {
+      ...mcpTools,
+      listDocuments,
+      createDocument,
+      readDocument,
+    };
 
     // Build instructions with agent context
     let instructions =
@@ -131,15 +159,77 @@ export const processAgentResponse = async (
     }
     instructions += agentContext;
 
+    if (channelDocuments.rows.length > 0 || channelAgents.rows.length > 0) {
+      instructions += `\n\nChannel ID: ${channelId} (use this when calling document tools)`;
+    }
+
     const agent = new Agent({
       name: agentName,
       instructions,
-      model: process.env.AI_MODEL || "openai/gpt-5",
+      model: process.env.AI_MODEL || "openrouter/moonshotai/kimi-k2",
       tools,
     });
 
     console.log("[agent] instructions", instructions);
     console.log("[agent] input", input);
+
+    // Log agent input and output to file
+    const logDir = join(process.cwd(), "logs");
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    // Sanitize agent name for filename (replace spaces and special chars with hyphens)
+    const sanitizedAgentName = agentName
+      .replace(/[^a-z0-9]/gi, "-")
+      .toLowerCase();
+    const logFile = join(
+      logDir,
+      `agent-${sanitizedAgentName}-${timestamp}.log`
+    );
+
+    // Ensure logs directory exists
+    try {
+      await mkdir(logDir, { recursive: true });
+    } catch (error) {
+      // Directory might already exist, ignore
+    }
+
+    // Helper function to format log entry as plain text
+    const formatLogEntry = (
+      output: string,
+      error?: string,
+      completedAt?: string
+    ): string => {
+      const timestamp = new Date().toISOString();
+
+      let log = `========================================\n`;
+      log += `AGENT LOG ENTRY\n`;
+      log += `========================================\n\n`;
+      log += `Timestamp: ${timestamp}\n`;
+      log += `Agent ID: ${agentId}\n`;
+      log += `Agent Name: ${agentName}\n`;
+      log += `Channel ID: ${channelId}\n`;
+      log += `Depth: ${depth}\n`;
+      if (completedAt) {
+        log += `Completed At: ${completedAt}\n`;
+      }
+      if (error) {
+        log += `Error: ${error}\n`;
+      }
+      log += `\n`;
+      log += `--- INPUT ---\n`;
+      log += `Instructions:\n${instructions}\n`;
+      log += `\n`;
+      log += `Full Input:\n${input}\n`;
+      log += `\n`;
+      log += `--- OUTPUT ---\n`;
+      log += `${output}\n`;
+      log += `\n`;
+      log += `========================================\n`;
+
+      return log;
+    };
+
+    // Write initial log entry with input
+    await writeFile(logFile, formatLogEntry("", undefined, undefined));
 
     let acc = "";
     try {
@@ -152,11 +242,6 @@ export const processAgentResponse = async (
           try {
             if (ev.type === "text-delta") {
               acc += ev.payload?.text ?? "";
-            } else if (ev.type === "tool-call") {
-              const name = ev.payload?.toolName ?? "tool";
-              const args = ev.payload?.args ?? {};
-              console.log("[agent] tool call:", name);
-              acc += `\n\n**Tool Call: ${name}**`;
             } else if (ev.type === "tool-result") {
               const id = ev.payload?.toolCallId ?? "";
               const name = ev.payload?.toolName ?? "tool";
@@ -166,7 +251,7 @@ export const processAgentResponse = async (
                 name,
                 result ? "success" : "no result"
               );
-              acc += `\n\n**Tool Result: ${name}**`;
+              acc += `\n\n*Tool Result: ${name}*`;
               if (result && typeof result === "string" && result.length > 0) {
                 // Include a snippet of the result if it's a string
                 const snippet =
@@ -192,6 +277,10 @@ export const processAgentResponse = async (
             } else if (ev.type === "error") {
               console.error("[agent] stream error event:", ev.payload);
               acc += `\n\n[Error: ${ev.payload?.message || "Unknown error"}]`;
+            } else if (ev.type === "tool-call-input-streaming-start") {
+              const name = ev.payload?.toolName ?? "tool";
+              console.log("[agent] tool call:", name);
+              acc += `\n\n*Tool Call: ${name}*`;
             }
             // Skip lifecycle events silently
           } catch (e) {
@@ -217,6 +306,15 @@ export const processAgentResponse = async (
           acc,
           agentMessageId,
         ]);
+        // Write error output to log file
+        try {
+          await writeFile(
+            logFile,
+            formatLogEntry(acc, streamError.message, new Date().toISOString())
+          );
+        } catch (logError) {
+          console.error("[agent] Failed to write error log file:", logError);
+        }
         throw streamError;
       }
     } catch (streamInitError: any) {
@@ -229,6 +327,15 @@ export const processAgentResponse = async (
         acc,
         agentMessageId,
       ]);
+      // Write initialization error to log file
+      try {
+        await writeFile(
+          logFile,
+          formatLogEntry(acc, streamInitError.message, new Date().toISOString())
+        );
+      } catch (logError) {
+        console.error("[agent] Failed to write error log file:", logError);
+      }
       throw streamInitError;
     }
 
@@ -236,6 +343,16 @@ export const processAgentResponse = async (
       "[agent] Agent response complete, accumulated length:",
       acc.length
     );
+
+    // Write complete output to log file
+    try {
+      await writeFile(
+        logFile,
+        formatLogEntry(acc, undefined, new Date().toISOString())
+      );
+    } catch (error) {
+      console.error("[agent] Failed to write log file:", error);
+    }
 
     // Parse response for @mentions of other agents
     const mentionedNames = Array.from(acc.matchAll(/@([a-z0-9_]+)/gi)).map(
@@ -299,6 +416,43 @@ export const processAgentResponse = async (
       ]);
     } catch (dbError) {
       console.error("[agent] Failed to update error message:", dbError);
+    }
+
+    // Write top-level error to log file
+    try {
+      const logDir = join(process.cwd(), "logs");
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      // Get agent name (query for it since agentName may not be in scope)
+      const errorAgentInfo = await query(
+        `SELECT name FROM agents WHERE id = $1`,
+        [agentId]
+      );
+      const errorAgentName = errorAgentInfo.rows[0]?.name || "unknown";
+      // Sanitize agent name for filename (replace spaces and special chars with hyphens)
+      const sanitizedAgentName = errorAgentName
+        .replace(/[^a-z0-9]/gi, "-")
+        .toLowerCase();
+      const logFile = join(
+        logDir,
+        `agent-${sanitizedAgentName}-${timestamp}.log`
+      );
+
+      let errorLog = `========================================\n`;
+      errorLog += `AGENT LOG ENTRY (ERROR)\n`;
+      errorLog += `========================================\n\n`;
+      errorLog += `Timestamp: ${new Date().toISOString()}\n`;
+      errorLog += `Agent ID: ${agentId}\n`;
+      errorLog += `Channel ID: ${channelId}\n`;
+      errorLog += `Depth: ${depth}\n`;
+      errorLog += `Error: ${error.message}\n`;
+      if (error.stack) {
+        errorLog += `\nStack Trace:\n${error.stack}\n`;
+      }
+      errorLog += `\n========================================\n`;
+
+      await writeFile(logFile, errorLog);
+    } catch (logError) {
+      console.error("[agent] Failed to write error log file:", logError);
     }
 
     return { success: false, error: error.message };

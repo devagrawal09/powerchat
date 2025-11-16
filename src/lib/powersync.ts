@@ -106,6 +106,21 @@ const schema = new Schema({
       },
     }
   ),
+  documents: new Table(
+    {
+      id: column.text,
+      channel_id: column.text,
+      title: column.text,
+      description: column.text,
+      content: column.text,
+      created_at: column.text,
+    },
+    {
+      indexes: {
+        idx_documents_channel: ["channel_id"],
+      },
+    }
+  ),
 });
 
 let db: PowerSyncDatabase | null = null;

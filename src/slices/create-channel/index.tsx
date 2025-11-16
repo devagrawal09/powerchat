@@ -1,8 +1,10 @@
 import { createSignal } from "solid-js";
+import { useNavigate } from "@solidjs/router";
 import { writeTransaction } from "~/lib/powersync";
 import { getUsername } from "~/lib/getUsername";
 
 export function CreateChannel() {
+  const navigate = useNavigate();
   const [creating, setCreating] = createSignal(false);
 
   const handleSubmit = async (e: Event) => {
@@ -49,6 +51,7 @@ export function CreateChannel() {
       });
 
       form.reset();
+      navigate(`/channel/${channelId}`);
     } catch (err) {
       console.error("Failed to create channel", err);
     } finally {

@@ -11,6 +11,12 @@ type MemberRow = {
   name: string | null;
 };
 
+type DocumentRow = {
+  id: string;
+  title: string;
+  description: string;
+};
+
 type ChatInputProps = {
   channelId: string;
   channelName?: string;
@@ -20,7 +26,7 @@ export function ChatInput(props: ChatInputProps) {
   const [content, setContent] = createSignal("");
   const [activeMentionIndex, setActiveMentionIndex] = createSignal(0);
 
-  // Detect mention query from content
+  // Detect mention query from content (@ for members)
   const mentionState = createMemo(() => {
     const text = content();
     const match = text.match(/@([a-z0-9_]*)$/i);
@@ -29,9 +35,34 @@ export function ChatInput(props: ChatInputProps) {
         isOpen: true,
         query: match[1],
         cursorPosition: match.index!,
+        type: "@" as const,
       };
     }
-    return { isOpen: false, query: "", cursorPosition: -1 };
+    return { isOpen: false, query: "", cursorPosition: -1, type: "@" as const };
+  });
+
+  // Detect document mention query from content (# for documents)
+  const documentMentionState = createMemo(() => {
+    const text = content();
+    const match = text.match(/#([a-z0-9_]*)$/i);
+    if (match) {
+      return {
+        isOpen: true,
+        query: match[1],
+        cursorPosition: match.index!,
+        type: "#" as const,
+      };
+    }
+    return { isOpen: false, query: "", cursorPosition: -1, type: "#" as const };
+  });
+
+  // Determine which mention type is active (prioritize # if both match)
+  const activeMentionState = createMemo(() => {
+    const docState = documentMentionState();
+    const memberState = mentionState();
+    if (docState.isOpen) return docState;
+    if (memberState.isOpen) return memberState;
+    return memberState; // default to member state for type
   });
 
   // Query members for agent mention detection and resolution
@@ -53,6 +84,16 @@ export function ChatInput(props: ChatInputProps) {
     () => [props.channelId]
   );
 
+  // Query documents for document mention autocomplete
+  const documents = useWatchedQuery<DocumentRow>(
+    () =>
+      `SELECT id, title, description 
+       FROM documents 
+       WHERE channel_id = ? 
+       ORDER BY created_at DESC`,
+    () => [props.channelId]
+  );
+
   // Fuzzy search utility (same as MentionAutocomplete)
   function fuzzyMatch(text: string, query: string): boolean {
     if (!query) return true;
@@ -69,9 +110,10 @@ export function ChatInput(props: ChatInputProps) {
     return j === query.length;
   }
 
-  // Get filtered mention options
+  // Get filtered mention options (members)
   const mentionOptions = createMemo(() => {
     const state = mentionState();
+    if (!state.isOpen) return [];
     const q = state.query.toLowerCase();
     const list = (members.data || [])
       .filter((m) => m.name)
@@ -83,14 +125,28 @@ export function ChatInput(props: ChatInputProps) {
     return list.filter((o) => fuzzyMatch(o.name, q));
   });
 
+  // Get filtered document mention options
+  const documentMentionOptions = createMemo(() => {
+    const state = documentMentionState();
+    if (!state.isOpen) return [];
+    const q = state.query.toLowerCase();
+    const list = (documents.data || []).map((d) => ({
+      type: "document" as const,
+      id: d.id,
+      name: d.title,
+    }));
+    return list.filter((o) => fuzzyMatch(o.name, q));
+  });
+
   const handleMentionSelect = (name: string) => {
-    const state = mentionState();
+    const state = activeMentionState();
     if (state.isOpen) {
       const before = content().slice(0, state.cursorPosition);
       const after = content().slice(
         state.cursorPosition + state.query.length + 1
       );
-      setContent(before + "@" + name + " " + after);
+      const prefix = state.type === "#" ? "#" : "@";
+      setContent(before + prefix + name + " " + after);
       setActiveMentionIndex(0);
     }
   };
@@ -147,7 +203,7 @@ export function ChatInput(props: ChatInputProps) {
       const mentionedNames = Array.from(text.matchAll(/@([a-z0-9_]+)/gi)).map(
         (m) => m[1].toLowerCase()
       );
-
+      console.log("mentionedNames", mentionedNames);
       // Resolve agent IDs
       // Note: This duplication of member name resolution is acceptable per VSA principles.
       // Each slice maintains independence. If duplicated a third time, extract to shared utility.
@@ -161,7 +217,7 @@ export function ChatInput(props: ChatInputProps) {
       const mentionedAgentIds = agentMembers
         .filter((a) => mentionedNames.includes(a.name))
         .map((a) => a.id);
-
+      console.log("mentionedAgentIds", mentionedAgentIds);
       // Trigger all mentioned agents simultaneously
       if (mentionedAgentIds.length > 0) {
         const triggerPromises = mentionedAgentIds.map(async (agentId) => {
@@ -213,11 +269,14 @@ export function ChatInput(props: ChatInputProps) {
             value={content()}
             onInput={(e) => setContent(e.currentTarget.value)}
             onKeyDown={(e) => {
-              const state = mentionState();
+              const state = activeMentionState();
               if (state.isOpen) {
+                const options =
+                  state.type === "#"
+                    ? documentMentionOptions()
+                    : mentionOptions();
                 if (e.key === "ArrowDown") {
                   e.preventDefault();
-                  const options = mentionOptions();
                   setActiveMentionIndex((prev) =>
                     Math.min(options.length - 1, prev + 1)
                   );
@@ -226,7 +285,6 @@ export function ChatInput(props: ChatInputProps) {
                   setActiveMentionIndex((prev) => Math.max(0, prev - 1));
                 } else if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  const options = mentionOptions();
                   const activeOption = options[activeMentionIndex()];
                   if (activeOption) {
                     handleMentionSelect(activeOption.name);
@@ -250,8 +308,9 @@ export function ChatInput(props: ChatInputProps) {
           />
           <MentionAutocomplete
             channelId={props.channelId}
-            mentionQuery={mentionState().query}
-            isOpen={mentionState().isOpen}
+            mentionQuery={activeMentionState().query}
+            mentionType={activeMentionState().type}
+            isOpen={activeMentionState().isOpen}
             activeIndex={activeMentionIndex()}
             onSelect={handleMentionSelect}
             onActiveIndexChange={setActiveMentionIndex}

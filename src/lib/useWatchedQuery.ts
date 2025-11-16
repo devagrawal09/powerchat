@@ -1,5 +1,6 @@
 import {
   Accessor,
+  createEffect,
   createResource,
   createSignal,
   onCleanup,
@@ -8,28 +9,67 @@ import {
 import { createStore, reconcile } from "solid-js/store";
 import { getPowerSync } from "~/lib/powersync";
 
+type WatchState<T> = {
+  data: T[];
+  loading: boolean;
+  error?: unknown;
+};
+
 export function useWatchedQuery<T = unknown>(
   sql: Accessor<string>,
   params: Accessor<unknown[]> = () => []
 ) {
-  const data = createStream<T[]>(async function* () {
-    const currentSql = sql();
-    const currentParams = params();
-    const db = await getPowerSync();
-    const watchIterator = db.watch(currentSql, currentParams);
-    for await (const result of watchIterator) {
-      yield result.rows?._array as T[];
-    }
+  const [state, setState] = createStore<WatchState<T>>({
+    data: [],
+    loading: true,
   });
 
-  return {
-    get data() {
-      return data() || [];
-    },
-    get loading() {
-      return data.loading;
-    },
-  };
+  createEffect(() => {
+    const currentSql = sql();
+    const currentParams = params();
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const db = await getPowerSync();
+        for await (const result of db.watch(currentSql, currentParams)) {
+          if (cancelled) break;
+          const rows = (result?.rows?._array ?? []) as T[];
+          setState("data", reconcile(rows));
+          setState("loading", false);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setState({ error: err, loading: false, data: state.data });
+        }
+      }
+    })();
+
+    onCleanup(() => {
+      cancelled = true;
+    });
+  });
+
+  return state;
+
+  // const data = createStream<T[]>(async function* () {
+  //   const currentSql = sql();
+  //   const currentParams = params();
+  //   const db = await getPowerSync();
+  //   const watchIterator = db.watch(currentSql, currentParams);
+  //   for await (const result of watchIterator) {
+  //     yield result.rows?._array as T[];
+  //   }
+  // });
+
+  // return {
+  //   get data() {
+  //     return data() || [];
+  //   },
+  //   get loading() {
+  //     return data.loading;
+  //   },
+  // };
 }
 
 export function createStream<T = unknown>(source: Accessor<AsyncIterable<T>>) {

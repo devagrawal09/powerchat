@@ -6,6 +6,11 @@ A real-time chat app with AI agents built with SolidStart, PowerSync, Neon, and 
 
 - 💬 Real-time chat channels
 - 🤖 AI agents you can @mention in channels
+- 📄 Document management - agents can create and manage markdown documents
+- 🔗 Document mentions - use #documentTitle to reference documents
+- 👥 Channel sidebar - view members, agents, and documents
+- 📖 Document viewer - click documents to view full content
+- 👤 Agent viewer - click agents to view their description and instructions
 - 📱 Offline-first with PowerSync local-first sync
 - ⚡ Instant UI updates via client-side writes
 - 🔐 Anonymous sessions (no signup required for MVP)
@@ -32,8 +37,8 @@ The database has already been created and seeded via Neon MCP:
 
 - Project: `powerchat` (ID: `morning-tree-55202603`)
 - Database: `neondb`
-- Tables: `users`, `agents`, `channels`, `channel_members`, `messages`, `message_mentions`
-- Demo agent: `Assistant` (ID: `00000000-0000-0000-0000-000000000001`)
+- Tables: `users`, `agents`, `channels`, `channel_members`, `messages`, `message_mentions`, `documents`
+- Demo agents: `Assistant`, `Analyst`, `Researcher`, `Writer`
 
 Connection string is in `env.md`.
 
@@ -74,10 +79,12 @@ Visit `http://localhost:3000`
 ## Usage
 
 1. **Create a Channel**: Use the form in the sidebar
-2. **Invite an Agent**: Use the agent ID `00000000-0000-0000-0000-000000000001` (name: `Assistant`)
-   - In a channel, you'd need an invite UI or do it manually via SQL for MVP
+2. **Invite an Agent**: Use the agent invite UI in a channel
 3. **Send Messages**: Type in the input box
-4. **Mention Agent**: Use `@Assistant` in your message to trigger AI reply
+4. **Mention Agents**: Use `@AgentName` in your message to trigger AI reply
+5. **Mention Documents**: Use `#DocumentTitle` to reference documents created by agents
+6. **View Documents**: Click on documents in the right sidebar to view full content
+7. **View Agent Details**: Click on agents in the right sidebar to see their description and instructions
 
 ## Architecture
 
@@ -101,7 +108,7 @@ Slices are categorized by their primary responsibility:
 
 - Fetch and display data
 - Use PowerSync `useWatchedQuery` for reactive data
-- Examples: `channel-list`, `chat-messages`, `username-check`, `channel-header`
+- Examples: `channel-list`, `chat-messages`, `username-check`, `channel-header`, `channel-member-list`, `channel-agents-list`, `channel-documents-list`, `document-viewer`, `agent-viewer`
 
 **Mutation Slices** (write operations):
 
@@ -236,10 +243,35 @@ bun test
 
 1. Client detects `@agent` in message
 2. Calls `triggerAgent` server function
-3. Server fetches recent context from Neon
-4. Mastra calls OpenAI GPT-5
-5. Agent reply inserted into Neon
-6. PowerSync syncs reply to all clients
+3. Server fetches recent context from Neon (messages, users, agents, documents)
+4. Server provides agent with:
+   - List of other agents in channel (encourages delegation)
+   - List of available documents (for knowledge transfer)
+   - Document management tools (list, create, read)
+5. Mastra calls OpenAI GPT-5
+6. Agent reply inserted into Neon
+7. PowerSync syncs reply to all clients
+8. Agent interactions logged to `logs/agent-{id}-{timestamp}.log`
+
+### Document Management
+
+Agents can create, list, and read markdown documents within channels:
+
+- **Create Document**: Agents use `createDocument` tool to store long-form content
+- **List Documents**: Agents use `listDocuments` to see available documents
+- **Read Document**: Agents use `readDocument` to access document content
+- **Document Mentions**: Users and agents can reference documents with `#DocumentTitle`
+- **Document Viewer**: Click documents in sidebar to view full content (replaces chat view)
+- **Agent Instructions**: Agents are instructed to keep responses concise (2-4 sentences) and use documents for detailed information
+
+### Agent Delegation
+
+Agents are encouraged to delegate tasks to specialized agents:
+
+- Agents receive a list of other agents in the channel as context
+- Instructions guide agents to delegate when another agent's expertise matches the task
+- Delegation syntax: Use `@agentname` only when explicitly delegating (not when describing)
+- Sequential delegation: Agents delegate sequentially when tasks depend on each other
 
 ### Key Files
 
@@ -249,18 +281,22 @@ bun test
 - `src/routes/api/powersync/token.ts` - JWT endpoint
 - `src/server/db.ts` - Neon connection pool
 - `src/server/actions.ts` - Server actions (used by mutation slices)
-- `src/server/agent.ts` - Mastra agent execution
+- `src/server/agent.ts` - Mastra agent execution with document tools and logging
+- `src/server/tools/documents.ts` - Document management tools for agents
 - `src/routes/(chat).tsx` - Layout with sidebar (orchestrates slices)
-- `src/routes/channel/[id].tsx` - Messages view (orchestrates slices)
+- `src/routes/channel/[id].tsx` - Messages view with document/agent viewers (orchestrates slices)
 - `src/slices/` - All feature slices (query and mutation)
+- `logs/` - Agent interaction logs (plain text format, git-ignored)
 
 ## MVP Limitations
 
 - No server-side validation of mentions/membership
 - Anonymous users only (no proper auth)
-- Single agent response (no multi-agent)
+- Single agent response per mention (no multi-agent parallel execution)
 - No streaming (simple text replies)
 - In-memory idempotency (resets on server restart)
+- Documents can only be created by agents (no client-side uploads)
+- No document editing or deletion
 
 ## Next Steps
 
@@ -272,3 +308,6 @@ bun test
 - Display names/avatars
 - Rich message formatting
 - Typing indicators
+- Document editing and deletion
+- Client-side document creation
+- Document search and filtering
