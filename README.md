@@ -40,27 +40,31 @@ The database has already been created and seeded via Neon MCP:
 - Tables: `users`, `agents`, `channels`, `channel_members`, `messages`, `message_mentions`, `documents`
 - Demo agents: `Assistant`, `Analyst`, `Researcher`, `Writer`
 
-Connection string is in `env.md`.
+Connection string should be set in `.env.local` (see Environment Variables section below).
 
 ### 3. Configure PowerSync Service
 
-See `POWERSYNC_SETUP.md` for detailed instructions on:
+PowerSync setup instructions are in `db/replication.sql`. You need to:
 
-- Enabling logical replication in Neon
-- Connecting PowerSync Service to your Neon database
-- Configuring sync rules to filter by user membership
+- Enable logical replication in Neon
+- Create a replication role for PowerSync Service
+- Connect PowerSync Service to your Neon database
+- Configure sync rules to filter by user membership
 
 ### 4. Environment Variables
 
-Copy the values from `env.md` to a `.env.local` file:
+Create a `.env.local` file with the following variables:
 
 ```bash
 NEON_DATABASE_URL="postgresql://..."
 POWERSYNC_SERVICE_URL=https://your-instance.powersync.com
 POWERSYNC_JWT_SECRET=your-secret-min-32-chars
+POWERSYNC_JWT_KID=your-key-id
 OPENAI_API_KEY=sk-your-key
 AI_MODEL=gpt-5
 ```
+
+**Note**: `POWERSYNC_JWT_SECRET` should be a Base64URL-encoded secret (minimum 32 characters). `POWERSYNC_JWT_KID` is the key ID used in the JWT header.
 
 Also add for client (Vite):
 
@@ -108,13 +112,13 @@ Slices are categorized by their primary responsibility:
 
 - Fetch and display data
 - Use PowerSync `useWatchedQuery` for reactive data
-- Examples: `channel-list`, `chat-messages`, `username-check`, `channel-header`, `channel-member-list`, `channel-agents-list`, `channel-documents-list`, `document-viewer`, `agent-viewer`
+- Examples: `channel-list`, `chat-messages`, `username-check`, `channel-header`, `channel-member-list`, `channel-agents-list`, `channel-documents-list`, `document-viewer`, `agent-viewer`, `mention-autocomplete`
 
 **Mutation Slices** (write operations):
 
 - Handle user actions that modify data
 - Use PowerSync `writeTransaction` or server actions
-- Examples: `create-channel`, `chat-input`, `username-registration`
+- Examples: `create-channel`, `chat-input`, `username-registration`, `channel-invite`, `create-agent`, `delete-channel`
 
 **Key Principle**: Each slice is **either a query OR a mutation**, never both. This ensures clear separation of concerns.
 
@@ -278,9 +282,8 @@ Agents are encouraged to delegate tasks to specialized agents:
 - `src/middleware.ts` - Sets anonymous user cookie
 - `src/lib/powersync.ts` - PowerSync client + schema
 - `src/lib/useWatchedQuery.ts` - Hook for reactive PowerSync queries
-- `src/routes/api/powersync/token.ts` - JWT endpoint
+- `src/server/powersync.ts` - PowerSync JWT token generation (`getPowerSyncToken`) and upload handler (`uploadData`)
 - `src/server/db.ts` - Neon connection pool
-- `src/server/actions.ts` - Server actions (used by mutation slices)
 - `src/server/agent.ts` - Mastra agent execution with document tools and logging
 - `src/server/tools/documents.ts` - Document management tools for agents
 - `src/routes/(chat).tsx` - Layout with sidebar (orchestrates slices)
