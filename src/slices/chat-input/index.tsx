@@ -1,6 +1,5 @@
 import { createSignal, createMemo } from "solid-js";
 import { writeTransaction } from "~/lib/powersync";
-import { processAgentResponse } from "~/server/agent";
 import { getUsername } from "~/lib/getUsername";
 import { useWatchedQuery } from "~/lib/useWatchedQuery";
 import { MentionAutocomplete } from "~/slices/mention-autocomplete";
@@ -71,7 +70,7 @@ export function ChatInput(props: ChatInputProps) {
   const members = useWatchedQuery<MemberRow>(
     () =>
       `SELECT cm.member_type, cm.member_id,
-              CASE 
+              CASE
                 WHEN cm.member_type = 'user' THEN COALESCE(u.id, cm.member_id)
                 WHEN cm.member_type = 'agent' THEN COALESCE(a.name, 'Agent')
                 ELSE cm.member_id
@@ -81,17 +80,17 @@ export function ChatInput(props: ChatInputProps) {
        LEFT JOIN agents a ON cm.member_type = 'agent' AND a.id = cm.member_id
        WHERE cm.channel_id = ?
        ORDER BY cm.member_type, name`,
-    () => [props.channelId]
+    () => [props.channelId],
   );
 
   // Query documents for document mention autocomplete
   const documents = useWatchedQuery<DocumentRow>(
     () =>
-      `SELECT id, title, description 
-       FROM documents 
-       WHERE channel_id = ? 
+      `SELECT id, title, description
+       FROM documents
+       WHERE channel_id = ?
        ORDER BY created_at DESC`,
-    () => [props.channelId]
+    () => [props.channelId],
   );
 
   // Fuzzy search utility (same as MentionAutocomplete)
@@ -143,7 +142,7 @@ export function ChatInput(props: ChatInputProps) {
     if (state.isOpen) {
       const before = content().slice(0, state.cursorPosition);
       const after = content().slice(
-        state.cursorPosition + state.query.length + 1
+        state.cursorPosition + state.query.length + 1,
       );
       const prefix = state.type === "#" ? "#" : "@";
       setContent(before + prefix + name + " " + after);
@@ -185,7 +184,7 @@ export function ChatInput(props: ChatInputProps) {
         const result = tx.execute(
           `INSERT INTO messages (id, channel_id, author_type, author_id, content, created_at)
            VALUES (?, ?, 'user', ?, ?, ?)`,
-          [messageId, props.channelId, username, text, userMessageCreatedAt]
+          [messageId, props.channelId, username, text, userMessageCreatedAt],
         );
         console.log("after execute sync");
 
@@ -199,61 +198,6 @@ export function ChatInput(props: ChatInputProps) {
 
       console.log("after writeTransaction async");
 
-      // Detect mentions
-      const mentionedNames = Array.from(text.matchAll(/@([a-z0-9_]+)/gi)).map(
-        (m) => m[1].toLowerCase()
-      );
-      console.log("mentionedNames", mentionedNames);
-      // Resolve agent IDs
-      // Note: This duplication of member name resolution is acceptable per VSA principles.
-      // Each slice maintains independence. If duplicated a third time, extract to shared utility.
-      const agentMembers = (members.data || [])
-        .filter((m) => m.member_type === "agent" && m.name)
-        .map((m) => ({
-          id: m.member_id,
-          name: m.name!.toLowerCase(),
-        }));
-
-      const mentionedAgentIds = agentMembers
-        .filter((a) => mentionedNames.includes(a.name))
-        .map((a) => a.id);
-      console.log("mentionedAgentIds", mentionedAgentIds);
-      // Trigger all mentioned agents simultaneously
-      if (mentionedAgentIds.length > 0) {
-        const triggerPromises = mentionedAgentIds.map(async (agentId) => {
-          const agentMessageId = crypto.randomUUID();
-          const agentMessageCreatedAt = new Date().toISOString();
-
-          // Insert placeholder "Thinking..." message
-          await writeTransaction(async (tx) => {
-            await tx.execute(
-              `INSERT INTO messages (id, channel_id, author_type, author_id, content, created_at)
-             VALUES (?, ?, 'agent', ?, ?, ?)`,
-              [
-                agentMessageId,
-                props.channelId,
-                agentId,
-                "Thinking...",
-                agentMessageCreatedAt,
-              ]
-            );
-          });
-
-          // Call server function to process agent response
-          // Server will query channel history and write directly to Neon, PowerSync will sync it back
-          return processAgentResponse(
-            props.channelId,
-            agentId,
-            agentMessageId,
-            text,
-            username,
-            0 // depth starts at 0 for user-triggered agents
-          );
-        });
-
-        // Wait for all agents to complete
-        await Promise.all(triggerPromises);
-      }
     } catch (error: unknown) {
       console.error("[send] error", error);
       // Error will be handled by the server function
@@ -278,7 +222,7 @@ export function ChatInput(props: ChatInputProps) {
                 if (e.key === "ArrowDown") {
                   e.preventDefault();
                   setActiveMentionIndex((prev) =>
-                    Math.min(options.length - 1, prev + 1)
+                    Math.min(options.length - 1, prev + 1),
                   );
                 } else if (e.key === "ArrowUp") {
                   e.preventDefault();
@@ -293,7 +237,7 @@ export function ChatInput(props: ChatInputProps) {
                   e.preventDefault();
                   const before = content().slice(0, state.cursorPosition);
                   const after = content().slice(
-                    state.cursorPosition + state.query.length + 1
+                    state.cursorPosition + state.query.length + 1,
                   );
                   setContent(before + after);
                   setActiveMentionIndex(0);

@@ -7,9 +7,6 @@ vi.mock("~/lib/powersync", () => ({
   writeTransaction: vi.fn(),
 }));
 
-vi.mock("~/server/agent", () => ({
-  processAgentResponse: vi.fn(),
-}));
 
 vi.mock("~/lib/getUsername", () => ({
   getUsername: vi.fn(() => "testuser"),
@@ -77,26 +74,4 @@ describe("ChatInput", () => {
     expect(input.value).toBe("");
   });
 
-  it("detects @mentions in message", async () => {
-    const { writeTransaction } = await import("~/lib/powersync");
-    const { processAgentResponse } = await import("~/server/agent");
-
-    vi.mocked(writeTransaction).mockResolvedValue(undefined);
-    vi.mocked(processAgentResponse).mockResolvedValue({
-      success: true,
-      agentMessageId: "test-id",
-    });
-
-    render(() => <ChatInput channelId="test-channel" />);
-    const input = screen.getByPlaceholderText(/Message #/);
-    const button = screen.getByText("Send");
-
-    fireEvent.input(input, { target: { value: "Hey @Assistant help me" } });
-    fireEvent.click(button);
-
-    // Wait for async operations
-    await new Promise((resolve) => setTimeout(resolve, 100));
-
-    expect(processAgentResponse).toHaveBeenCalled();
-  });
 });
