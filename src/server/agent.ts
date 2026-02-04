@@ -1,25 +1,9 @@
 "use server";
 import { Agent } from "@mastra/core/agent";
-import { MCPClient } from "@mastra/mcp";
 import { query } from "./db";
 import { listDocuments, createDocument, readDocument } from "./tools/documents";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
-
-// Create Mastra agent
-// Prefer a hosted Firecrawl MCP server via FIRECRAWL_MCP_URL; fallback to npx
-const firecrawlServerConfig = {
-  url: new URL(
-    `https://mcp.firecrawl.dev/${process.env.FIRECRAWL_API_KEY}/v2/mcp`
-  ),
-};
-
-const mcpClient = new MCPClient({
-  id: "powerchat-mcp-client",
-  servers: {
-    firecrawl: firecrawlServerConfig,
-  },
-});
 
 export const processAgentResponse = async (
   channelId: string,
@@ -27,7 +11,7 @@ export const processAgentResponse = async (
   agentMessageId: string,
   userMessage: string,
   triggeringUsername: string,
-  depth: number = 0
+  depth: number = 0,
 ) => {
   try {
     console.log("[agent] Processing agent response", { agentId, depth });
@@ -44,7 +28,7 @@ export const processAgentResponse = async (
     // Get agent info (system instructions, name, and description)
     const agentInfo = await query(
       `SELECT name, system_instructions, description FROM agents WHERE id = $1`,
-      [agentId]
+      [agentId],
     );
     const agentName = agentInfo.rows[0]?.name || "Agent";
     const systemInstructions = agentInfo.rows[0]?.system_instructions || "";
@@ -52,21 +36,21 @@ export const processAgentResponse = async (
 
     // Get all agents in the channel with their descriptions
     const channelAgents = await query(
-      `SELECT a.id, a.name, a.description 
+      `SELECT a.id, a.name, a.description
        FROM agents a
        JOIN channel_members cm ON cm.member_id = a.id::text AND cm.member_type = 'agent'
        WHERE cm.channel_id = $1 AND a.id::text != $2
        ORDER BY a.name`,
-      [channelId, agentId]
+      [channelId, agentId],
     );
 
     // Get all documents in the channel
     const channelDocuments = await query(
-      `SELECT id, title, description 
-       FROM documents 
-       WHERE channel_id = $1 
+      `SELECT id, title, description
+       FROM documents
+       WHERE channel_id = $1
        ORDER BY created_at DESC`,
-      [channelId]
+      [channelId],
     );
 
     // Build agent context for instructions
@@ -99,7 +83,7 @@ export const processAgentResponse = async (
     // Query recent message history
     const messages = await query(
       `SELECT m.author_type, m.content,
-        CASE 
+        CASE
           WHEN m.author_type = 'user' THEN u.id
           WHEN m.author_type = 'agent' THEN a.name
           WHEN m.author_type = 'system' THEN 'System'
@@ -107,10 +91,10 @@ export const processAgentResponse = async (
        FROM messages m
        LEFT JOIN users u ON m.author_type = 'user' AND m.author_id = u.id
        LEFT JOIN agents a ON m.author_type = 'agent' AND m.author_id = a.id::text
-       WHERE m.channel_id = $1 
-       ORDER BY m.created_at ASC, m.id ASC 
+       WHERE m.channel_id = $1
+       ORDER BY m.created_at ASC, m.id ASC
        LIMIT 30`,
-      [channelId]
+      [channelId],
     );
 
     const history = (messages.rows || [])
@@ -123,25 +107,6 @@ export const processAgentResponse = async (
       .join("\n");
 
     const input = `Channel: ${channelId}\n${history}\nUser: ${userMessage}`;
-
-    // Only provide firecrawl tools to the researcher agent
-    let mcpTools = {};
-    if (agentName.toLowerCase() === "researcher") {
-      const allMcpTools = await mcpClient.getTools();
-      // Filter to only include firecrawl tools
-      mcpTools = Object.fromEntries(
-        Object.entries(allMcpTools).filter(([key]) =>
-          key.startsWith("firecrawl_")
-        )
-      );
-    }
-
-    const tools = {
-      ...mcpTools,
-      listDocuments,
-      createDocument,
-      readDocument,
-    };
 
     // Build instructions with agent context
     let instructions =
@@ -166,8 +131,12 @@ export const processAgentResponse = async (
     const agent = new Agent({
       name: agentName,
       instructions,
-      model: process.env.AI_MODEL || "openrouter/moonshotai/kimi-k2",
-      tools,
+      model: process.env.AI_MODEL || "openrouter/anthropic/claude-haiku-4.5",
+      tools: {
+        listDocuments,
+        createDocument,
+        readDocument,
+      },
     });
 
     console.log("[agent] instructions", instructions);
@@ -182,7 +151,7 @@ export const processAgentResponse = async (
       .toLowerCase();
     const logFile = join(
       logDir,
-      `agent-${sanitizedAgentName}-${timestamp}.log`
+      `agent-${sanitizedAgentName}-${timestamp}.log`,
     );
 
     // Ensure logs directory exists
@@ -196,7 +165,7 @@ export const processAgentResponse = async (
     const formatLogEntry = (
       output: string,
       error?: string,
-      completedAt?: string
+      completedAt?: string,
     ): string => {
       const timestamp = new Date().toISOString();
 
@@ -249,7 +218,7 @@ export const processAgentResponse = async (
               console.log(
                 "[agent] tool result:",
                 name,
-                result ? "success" : "no result"
+                result ? "success" : "no result",
               );
               acc += `\n\n*Tool Result: ${name}*`;
               if (result && typeof result === "string" && result.length > 0) {
@@ -310,7 +279,7 @@ export const processAgentResponse = async (
         try {
           await writeFile(
             logFile,
-            formatLogEntry(acc, streamError.message, new Date().toISOString())
+            formatLogEntry(acc, streamError.message, new Date().toISOString()),
           );
         } catch (logError) {
           console.error("[agent] Failed to write error log file:", logError);
@@ -331,7 +300,11 @@ export const processAgentResponse = async (
       try {
         await writeFile(
           logFile,
-          formatLogEntry(acc, streamInitError.message, new Date().toISOString())
+          formatLogEntry(
+            acc,
+            streamInitError.message,
+            new Date().toISOString(),
+          ),
         );
       } catch (logError) {
         console.error("[agent] Failed to write error log file:", logError);
@@ -341,14 +314,14 @@ export const processAgentResponse = async (
 
     console.log(
       "[agent] Agent response complete, accumulated length:",
-      acc.length
+      acc.length,
     );
 
     // Write complete output to log file
     try {
       await writeFile(
         logFile,
-        formatLogEntry(acc, undefined, new Date().toISOString())
+        formatLogEntry(acc, undefined, new Date().toISOString()),
       );
     } catch (error) {
       console.error("[agent] Failed to write log file:", error);
@@ -356,7 +329,7 @@ export const processAgentResponse = async (
 
     // Parse response for @mentions of other agents
     const mentionedNames = Array.from(acc.matchAll(/@([a-z0-9_]+)/gi)).map(
-      (m) => m[1].toLowerCase()
+      (m) => m[1].toLowerCase(),
     );
 
     // Find mentioned agent IDs
@@ -385,7 +358,7 @@ export const processAgentResponse = async (
               mentionedAgentId,
               "Thinking...",
               agentMessageCreatedAt,
-            ]
+            ],
           );
 
           // Trigger agent response
@@ -395,9 +368,9 @@ export const processAgentResponse = async (
             newAgentMessageId,
             acc, // Use the agent's response as the trigger message
             agentName, // The triggering agent's name
-            depth + 1
+            depth + 1,
           );
-        }
+        },
       );
 
       // Wait for all agents to complete
@@ -425,7 +398,7 @@ export const processAgentResponse = async (
       // Get agent name (query for it since agentName may not be in scope)
       const errorAgentInfo = await query(
         `SELECT name FROM agents WHERE id = $1`,
-        [agentId]
+        [agentId],
       );
       const errorAgentName = errorAgentInfo.rows[0]?.name || "unknown";
       // Sanitize agent name for filename (replace spaces and special chars with hyphens)
@@ -434,7 +407,7 @@ export const processAgentResponse = async (
         .toLowerCase();
       const logFile = join(
         logDir,
-        `agent-${sanitizedAgentName}-${timestamp}.log`
+        `agent-${sanitizedAgentName}-${timestamp}.log`,
       );
 
       let errorLog = `========================================\n`;

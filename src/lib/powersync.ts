@@ -18,6 +18,7 @@ class PowerChatConnector implements PowerSyncBackendConnector {
     // Call server function directly - no HTTP overhead!
     const { token, expiresAt } = await getPowerSyncToken();
     const endpoint = import.meta.env.VITE_POWERSYNC_SERVICE_URL;
+    console.log({ endpoint, token, expiresAt });
     return { endpoint, token, expiresAt: new Date(expiresAt) };
   }
 
@@ -39,7 +40,7 @@ class PowerChatConnector implements PowerSyncBackendConnector {
           table: op.table,
           id: op.id,
           opData: op.opData ?? {},
-        }))
+        })),
       );
 
       console.log("[uploadData] p", p);
@@ -88,7 +89,7 @@ const schema = new Schema({
       member_id: column.text,
       joined_at: column.text,
     },
-    { indexes: { idx_channel_members_member: ["member_type", "member_id"] } }
+    { indexes: { idx_channel_members_member: ["member_type", "member_id"] } },
   ),
   messages: new Table(
     {
@@ -104,7 +105,7 @@ const schema = new Schema({
         idx_messages_channel_time: ["channel_id", "created_at", "id"],
         idx_messages_author: ["author_type", "author_id"],
       },
-    }
+    },
   ),
   documents: new Table(
     {
@@ -119,7 +120,7 @@ const schema = new Schema({
       indexes: {
         idx_documents_channel: ["channel_id"],
       },
-    }
+    },
   ),
 });
 
@@ -148,7 +149,7 @@ export async function getPowerSync() {
 
 // Helper to execute writes
 export async function writeTransaction<T>(
-  callback: (tx: Transaction) => Promise<T>
+  callback: (tx: Transaction) => Promise<T>,
 ): Promise<T> {
   const powersync = await getPowerSync();
   return powersync.writeTransaction(callback);
