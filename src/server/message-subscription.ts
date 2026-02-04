@@ -36,7 +36,7 @@ export async function startMessageSubscription(): Promise<void> {
     const db = await getPowerSyncNode();
     console.log("[subscription] database ready");
     await db.execute(
-      `CREATE TABLE IF NOT EXISTS ${processedTable} (id TEXT PRIMARY KEY, processed_at TEXT)`
+      `CREATE TABLE IF NOT EXISTS ${processedTable} (id TEXT PRIMARY KEY, processed_at TEXT)`,
     );
     console.log("[subscription] processed table ready");
 
@@ -49,7 +49,7 @@ export async function startMessageSubscription(): Promise<void> {
     };
 
     const processedRows = (await db.getAll(
-      `SELECT id FROM ${processedTable}`
+      `SELECT id FROM ${processedTable}`,
     )) as { id: string }[];
     const processed = new Set(processedRows.map((row) => row.id));
     const inFlight = new Set<string>();
@@ -59,7 +59,7 @@ export async function startMessageSubscription(): Promise<void> {
 
     if (processed.size === 0) {
       const existingRows = (await db.getAll(
-        "SELECT id FROM messages WHERE author_type = 'user'"
+        "SELECT id FROM messages WHERE author_type = 'user'",
       )) as { id: string }[];
       for (const row of existingRows) {
         if (!row?.id) continue;
@@ -95,7 +95,7 @@ export async function startMessageSubscription(): Promise<void> {
     };
 
     const query =
-      "SELECT id, channel_id, author_id, content, created_at FROM messages WHERE author_type = 'user' ORDER BY created_at ASC, id ASC";
+      "SELECT * FROM messages WHERE author_type = 'user' ORDER BY created_at ASC, id ASC";
 
     console.log("[subscription] starting messages watch");
 

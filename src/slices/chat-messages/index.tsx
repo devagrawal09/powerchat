@@ -29,18 +29,18 @@ export function ChatMessages(props: ChatMessagesProps) {
   // Query messages without JOINs - enables trigger-based diffs later
   const messages = useWatchedQuery<MessageRow>(
     () =>
-      `SELECT * 
-       FROM messages 
+      `SELECT *
+       FROM messages
        WHERE channel_id = ?
        ORDER BY created_at ASC, id ASC`,
-    () => [props.channelId]
+    () => [props.channelId],
   );
 
   // Query channel members separately for author name lookup
   const members = useWatchedQuery<MemberRow>(
     () =>
       `SELECT cm.member_type, cm.member_id,
-              CASE 
+              CASE
                 WHEN cm.member_type = 'user' THEN COALESCE(u.id, cm.member_id)
                 WHEN cm.member_type = 'agent' THEN COALESCE(a.name, 'Agent')
                 ELSE cm.member_id
@@ -49,7 +49,7 @@ export function ChatMessages(props: ChatMessagesProps) {
        LEFT JOIN users u ON cm.member_type = 'user' AND u.id = cm.member_id
        LEFT JOIN agents a ON cm.member_type = 'agent' AND a.id = cm.member_id
        WHERE cm.channel_id = ?`,
-    () => [props.channelId]
+    () => [props.channelId],
   );
 
   // Create lookup map: (author_type, author_id) -> name
@@ -83,7 +83,7 @@ export function ChatMessages(props: ChatMessagesProps) {
   const lastMessageId = createMemo(() =>
     messages.data.length > 0
       ? messages.data[messages.data.length - 1]?.id
-      : null
+      : null,
   );
 
   // Scroll to bottom when channel changes or new messages arrive
@@ -104,7 +104,7 @@ export function ChatMessages(props: ChatMessagesProps) {
     const username = currentUsername();
     if (!username) return false;
     const mentions = Array.from(content.matchAll(/@([a-z0-9_]+)/gi)).map((m) =>
-      m[1].toLowerCase().trim()
+      m[1].toLowerCase().trim(),
     );
     const normalizedUsername = username.toLowerCase().trim();
     return mentions.includes(normalizedUsername);

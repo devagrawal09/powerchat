@@ -1,4 +1,5 @@
-import { Show } from "solid-js";
+import { createEffect, Show } from "solid-js";
+import { useNavigate } from "solid-router";
 import { useWatchedQuery } from "~/lib/useWatchedQuery";
 import { RenderMarkdown } from "~/components/Markdown";
 
@@ -17,11 +18,19 @@ type DocumentViewerProps = {
 export function DocumentViewer(props: DocumentViewerProps) {
   const document = useWatchedQuery<DocumentRow>(
     () =>
-      `SELECT id, title, description, content 
-       FROM documents 
+      `SELECT id, title, description, content
+       FROM documents
        WHERE id = ?`,
-    () => [props.documentId]
+    () => [props.documentId],
   );
+
+  // const navigate = useNavigate();
+  // createEffect(() => {
+  //   if(document.data.length === 0) {
+  //     console.log(document.data[0]);
+  //     navigate
+  //   }
+  // })
 
   return (
     <div class="flex-1 flex flex-col h-full">
