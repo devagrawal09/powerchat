@@ -101,7 +101,6 @@ PowerChat uses **vertical slice architecture** to organize features by domain ra
 Every slice lives in `src/slices/{feature-name}/` and contains:
 
 - `index.tsx` - The component/hook implementation
-- `spec.md` - Specification document (see Spec-Driven Development below)
 - `index.test.tsx` - Test file (see Testing below)
 
 #### Query vs Mutation Slices
@@ -147,48 +146,6 @@ export default function ChatLayout() {
   // ... render ChannelList and other slices
 }
 ```
-
-### Spec-Driven Development
-
-Every slice follows a **spec-driven development** approach:
-
-1. **Write the spec first** (`spec.md`) - Document the feature's purpose, data flow, UI, and behavior
-2. **Implement the slice** (`index.tsx`) - Build the component/hook according to the spec
-3. **Spec as documentation** - The spec serves as living documentation for the feature
-
-#### Spec Structure
-
-Each `spec.md` follows a consistent format:
-
-```markdown
-# Feature Name
-
-## Purpose
-
-Brief description of what this slice does
-
-## Data
-
-- **Input**: Props/parameters the slice receives
-- **Watches**: PowerSync queries (for query slices)
-- **Mutates**: Data modifications (for mutation slices)
-- **Emits**: Callbacks or events
-
-## UI
-
-Visual description of the component
-
-## Behavior
-
-Step-by-step behavior description
-```
-
-#### Benefits
-
-- **Clear requirements** - Specs define exactly what needs to be built
-- **Living documentation** - Specs stay up-to-date with implementation
-- **Onboarding** - New developers can read specs to understand features
-- **Refactoring safety** - Specs help ensure behavior doesn't change unexpectedly
 
 ### Testing
 
