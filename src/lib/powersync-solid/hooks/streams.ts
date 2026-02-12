@@ -1,18 +1,25 @@
-import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  type Accessor,
+} from "solid-js";
 import type {
   AbstractPowerSyncDatabase,
   SyncStatus,
   SyncStreamStatus,
-  SyncStreamSubscription
-} from '@powersync/common';
-import type { QuerySyncStreamOptions, UseSyncStreamOptions } from '../types.js';
-import { usePowerSync } from '../context.js';
-import { useStatus } from './useStatus.js';
+  SyncStreamSubscription,
+} from "@powersync/common";
+import type { QuerySyncStreamOptions, UseSyncStreamOptions } from "../types.js";
+import { usePowerSync } from "../context.js";
+import { useStatus } from "./useStatus.js";
 
 export function useSyncStream(options: UseSyncStreamOptions) {
   const db = usePowerSync();
   const status = useStatus();
-  const [subscription, setSubscription] = createSignal<SyncStreamSubscription | null>(null);
+  const [subscription, setSubscription] =
+    createSignal<SyncStreamSubscription | null>(null);
 
   createEffect(() => {
     if (!db) {
@@ -23,7 +30,7 @@ export function useSyncStream(options: UseSyncStreamOptions) {
     let active = true;
     let currentSubscription: SyncStreamSubscription | null = null;
 
-    db.syncStream(options.name, options.parameters)
+    db.syncStream(options.name, options.parameters || [])
       .subscribe(options)
       .then((sub) => {
         if (active) {
@@ -45,18 +52,18 @@ export function useSyncStream(options: UseSyncStreamOptions) {
     if (!sub) {
       return null;
     }
-    return status().forStream(sub);
+    return status().forStream(sub) || null;
   });
 }
 
 export function useAllSyncStreamsHaveSynced(
   db: Accessor<AbstractPowerSyncDatabase | null>,
-  streams: Accessor<QuerySyncStreamOptions[] | undefined>
+  streams: Accessor<QuerySyncStreamOptions[] | undefined>,
 ) {
   const [synced, setSynced] = createSignal(true);
   const hash = createMemo(() => {
     const currentStreams = streams();
-    return currentStreams ? JSON.stringify(currentStreams) : '';
+    return currentStreams ? JSON.stringify(currentStreams) : "";
   });
 
   createEffect(() => {
@@ -75,14 +82,21 @@ export function useAllSyncStreamsHaveSynced(
     const promises: Promise<SyncStreamSubscription>[] = [];
 
     for (const stream of currentStreams) {
-      promises.push(currentDb.syncStream(stream.name, stream.parameters).subscribe(stream));
+      promises.push(
+        currentDb
+          .syncStream(stream.name, stream.parameters || [])
+          .subscribe(stream),
+      );
     }
 
     Promise.all(promises).then(async (resolvedStreams) => {
       function allHaveSynced(status: SyncStatus) {
         return resolvedStreams.every((s, i) => {
-          const request = currentStreams[i];
-          return !request.waitForStream || status.forStream(s)?.subscription?.hasSynced;
+          const request = (currentStreams || [])[i];
+          return (
+            !request.waitForStream ||
+            status.forStream(s)?.subscription?.hasSynced
+          );
         });
       }
 
@@ -91,7 +105,7 @@ export function useAllSyncStreamsHaveSynced(
         setSynced(true);
 
         await new Promise<void>((resolve) => {
-          abort.signal.addEventListener('abort', () => resolve());
+          abort.signal.addEventListener("abort", () => resolve());
         });
       }
 

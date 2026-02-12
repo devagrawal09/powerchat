@@ -1,23 +1,25 @@
-import { createEffect } from 'solid-js';
-import { createStore, reconcile } from 'solid-js/store';
-import { WatchedQuery } from '@powersync/common';
+import { createEffect } from "solid-js";
+import { createStore, reconcile } from "solid-js/store";
+import { WatchedQuery } from "@powersync/common";
 
 export const useWatchedQuerySubscription = <
   ResultType = unknown,
-  Query extends WatchedQuery<ResultType> = WatchedQuery<ResultType>
+  Query extends WatchedQuery<ResultType> = WatchedQuery<ResultType>,
 >(
-  query: Query
-): Query['state'] => {
-  return useNullableWatchedQuerySubscription(query) as Query['state'];
+  query: Query,
+): Query["state"] => {
+  return useNullableWatchedQuerySubscription(query) as Query["state"];
 };
 
 export const useNullableWatchedQuerySubscription = <
   ResultType = unknown,
-  Query extends WatchedQuery<ResultType> = WatchedQuery<ResultType>
+  Query extends WatchedQuery<ResultType> = WatchedQuery<ResultType>,
 >(
-  query: Query | null
-): Query['state'] | undefined => {
-  const [state, setState] = createStore<Query['state']>(query?.state ?? ({} as Query['state']));
+  query: Query | null,
+): Query["state"] | undefined => {
+  const [state, setState] = createStore<Query["state"]>(
+    query?.state ?? ({} as Query["state"]),
+  );
 
   createEffect(() => {
     if (!query) {
@@ -27,9 +29,7 @@ export const useNullableWatchedQuerySubscription = <
     setState(reconcile(query.state));
 
     return query.registerListener({
-      onStateChange: (updatedState) => {
-        setState(reconcile(updatedState));
-      }
+      onStateChange: (updatedState) => setState(reconcile(updatedState)),
     });
   });
 

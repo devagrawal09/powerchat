@@ -2,7 +2,6 @@ import { createResource, createSignal, type Accessor } from "solid-js";
 import type {
   AbstractPowerSyncDatabase,
   CompilableQuery,
-  ParsedQuery,
 } from "@powersync/common";
 import { parseQuery } from "@powersync/common";
 import type { QueryResult, UseSingleQueryOptions } from "../../types.js";
@@ -32,13 +31,6 @@ export const useSingleQuery = <T = unknown>(
   options: Accessor<UseSingleQueryOptions> = () => ({}),
 ): QueryResult<T> => {
   const contextDb = usePowerSync();
-  const initialOptions = options();
-
-  // Track if this is the initial load vs a refetch
-  const [hasInitialData, setHasInitialData] = createSignal(false);
-
-  // Manual refresh trigger
-  const [refreshTrigger, setRefreshTrigger] = createSignal(0);
 
   // Create a source signal that tracks all the reactive dependencies
   const source = ():
@@ -47,7 +39,6 @@ export const useSingleQuery = <T = unknown>(
         params: unknown[];
         db: AbstractPowerSyncDatabase | null;
         active: boolean;
-        refreshTrigger: number;
       }
     | false => {
     if (isServerSide()) {
@@ -71,11 +62,10 @@ export const useSingleQuery = <T = unknown>(
       params: params(),
       db: currentDb,
       active,
-      refreshTrigger: refreshTrigger(),
     };
   };
 
-  const [resource] = createResource(
+  const [resource, { refetch }] = createResource(
     source,
     async (src) => {
       // let parsedQuery: ParsedQuery;
@@ -92,7 +82,6 @@ export const useSingleQuery = <T = unknown>(
           result = await src.query.execute();
         }
 
-        setHasInitialData(true);
         return result;
       } catch (error) {
         throw wrapError(error as Error);
@@ -108,14 +97,14 @@ export const useSingleQuery = <T = unknown>(
       return resource() ?? [];
     },
     get isLoading() {
-      return resource.loading && !hasInitialData();
+      return resource.loading;
     },
     get error() {
       return resource.error;
     },
     refresh: async (signal?: AbortSignal) => {
       if (signal?.aborted) return;
-      setRefreshTrigger((t) => t + 1);
+      await refetch();
     },
   };
 };

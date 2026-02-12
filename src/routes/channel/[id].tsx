@@ -25,7 +25,9 @@ export default function ChannelPage() {
   );
 
   createEffect(() => {
+    console.log({ data: channel().data, loading: channel().isLoading });
     if (!channel().isLoading && channel().data.length === 0) {
+      console.log("Channel not found");
       navigate("/", { replace: true });
     }
   });

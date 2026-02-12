@@ -43,14 +43,10 @@ export const useWatchedQuery = <T = unknown>(
 ): WatchedQueryState<T> => {
   const contextDb = usePowerSync();
 
-  // Use a signal to trigger refetches from watch updates
-  const [trigger, setTrigger] = createSignal(0);
-  createEffect(() => {
-    console.log({ trigger: trigger() });
-  });
-
   // Track if this is the initial load vs a refetch
-  const [hasInitialData, setHasInitialData] = createSignal(false);
+  const [watchError, setWatchError] = createSignal<Error | undefined>(
+    undefined,
+  );
 
   // Create a source signal that tracks all the reactive dependencies
   const source = () => {
@@ -76,15 +72,17 @@ export const useWatchedQuery = <T = unknown>(
       options: currentOptions,
       db: currentDb,
       active,
-      trigger: trigger(),
+      error: watchError(),
     };
   };
 
-  const [resource] = createResource(
+  const [resource, { mutate }] = createResource(
     source,
     async (src) => {
-      // console.log(`starting`, src.query, src.params);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      if (src.error) {
+        throw src.error;
+      }
+
       let parsedQuery: ParsedQuery;
       try {
         parsedQuery = parseQuery(src.query, src.params);
@@ -103,7 +101,6 @@ export const useWatchedQuery = <T = unknown>(
         result = await src.query.execute();
       }
 
-      setHasInitialData(true);
       return result as ReadonlyArray<Readonly<T>>;
     },
     {
@@ -160,9 +157,9 @@ export const useWatchedQuery = <T = unknown>(
         });
 
     const disposer = watch.registerListener({
-      onStateChange: () => {
-        // Trigger a refetch by updating the trigger signal
-        setTrigger((t) => t + 1);
+      onStateChange: (updatedState) => {
+        mutate(updatedState.data);
+        setWatchError(updatedState.error ?? undefined);
       },
     });
 
@@ -181,7 +178,7 @@ export const useWatchedQuery = <T = unknown>(
       return resource() ?? [];
     },
     get isLoading() {
-      return resource.loading && !hasInitialData();
+      return resource.loading;
     },
     get error() {
       return resource.error;
