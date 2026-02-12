@@ -2,16 +2,15 @@ import type {
   AbstractPowerSyncDatabase,
   DifferentialWatchedQueryComparator,
   SQLOnChangeOptions,
-  SyncStreamSubscribeOptions
-} from '@powersync/common';
-import type { Accessor } from 'solid-js';
+  SyncStreamSubscribeOptions,
+} from "@powersync/common";
+import type { Accessor } from "solid-js";
 
-export type SsrBehavior = 'skip' | 'fallback';
+export type SsrBehavior = "skip" | "fallback";
 
 export type WatchedQueryState<T> = {
   data: ReadonlyArray<Readonly<T>>;
   isLoading: boolean;
-  isFetching: boolean;
   error?: Error;
 };
 
@@ -34,7 +33,7 @@ export type UseWatchedQueryOptions = {
   ssr?: SsrBehavior;
 };
 
-export interface HookWatchOptions extends Omit<SQLOnChangeOptions, 'signal'> {
+export interface HookWatchOptions extends Omit<SQLOnChangeOptions, "signal"> {
   streams?: QuerySyncStreamOptions[];
   reportFetching?: boolean;
 }
@@ -62,10 +61,11 @@ export type UseQueryOptions<RowType = unknown> = UseWatchedQueryOptions &
     active?: Accessor<boolean>;
   };
 
-export type UseWatchedQueryHookOptions<RowType = unknown> = UseWatchedQueryOptions &
-  Omit<DifferentialHookOptions<RowType>, 'streams'> & {
-    active?: Accessor<boolean>;
-  };
+export type UseWatchedQueryHookOptions<RowType = unknown> =
+  UseWatchedQueryOptions &
+    Omit<DifferentialHookOptions<RowType>, "streams"> & {
+      active?: Accessor<boolean>;
+    };
 
 export type UseSingleQueryOptions = UseWatchedQueryOptions & {
   active?: Accessor<boolean>;
@@ -74,22 +74,21 @@ export type UseSingleQueryOptions = UseWatchedQueryOptions & {
 export type QueryResult<RowType> = {
   data: RowType[];
   isLoading: boolean;
-  isFetching: boolean;
-  error: Error | undefined;
+  error?: Error;
   refresh?: (signal?: AbortSignal) => Promise<void>;
 };
 
 export type ReadonlyQueryResult<RowType> = {
   readonly data: ReadonlyArray<Readonly<RowType>>;
   readonly isLoading: boolean;
-  readonly isFetching: boolean;
-  readonly error: Error | undefined;
+  readonly error?: Error;
   refresh?: (signal?: AbortSignal) => Promise<void>;
 };
 
-export type UseTriggerBasedDiffOptions<T = unknown> = TriggerBasedDiffOptions<T> & {
-  db?: Accessor<AbstractPowerSyncDatabase | null>;
-  ssr?: SsrBehavior;
-};
+export type UseTriggerBasedDiffOptions<T = unknown> =
+  TriggerBasedDiffOptions<T> & {
+    db?: Accessor<AbstractPowerSyncDatabase | null>;
+    ssr?: SsrBehavior;
+  };
 
 export type TriggerBasedDiffState<T> = WatchedQueryState<T>;

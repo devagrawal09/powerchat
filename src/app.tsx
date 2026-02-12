@@ -11,7 +11,7 @@ export default function App() {
     <PowerSyncContext.Provider value={powersync}>
       <Router
         root={(props) => (
-          <Suspense>
+          <Suspense fallback={<div>Loading...</div>}>
             <ChatLayout>{props.children}</ChatLayout>
           </Suspense>
         )}

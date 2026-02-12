@@ -40,6 +40,12 @@ vi.mock("~/lib/powersync-solid/hooks/useQuery", () => ({
   })),
 }));
 
+vi.mock("~/lib/powersync-solid", () => ({
+  usePowerSync: vi.fn(() => ({
+    writeTransaction: vi.fn(),
+  })),
+}));
+
 vi.mock("~/components/Markdown", () => ({
   RenderMarkdown: (props: { children: string }) => (
     <span>{props.children}</span>
@@ -135,8 +141,8 @@ describe("ChatMessages", () => {
 
     render(() => <ChatMessages channelId="channel-1" />);
 
-    expect(screen.getByText("Unknown")).toBeInTheDocument();
-    expect(screen.getByText("?")).toBeInTheDocument(); // Avatar fallback
+    expect(screen.getByText("user-unknown")).toBeInTheDocument();
+    expect(screen.getByText("U")).toBeInTheDocument();
   });
 
   it("queries messages with correct channel ID", async () => {

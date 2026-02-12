@@ -34,6 +34,6 @@ describe("ChannelHeader", () => {
     }));
 
     render(() => <ChannelHeader channelId="test-channel" />);
-    expect(screen.getByText("Loading...")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("#");
   });
 });

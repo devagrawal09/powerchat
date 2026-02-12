@@ -60,7 +60,6 @@ class PowerChatConnector implements PowerSyncBackendConnector {
   }
 }
 
-// Define schema matching our Neon tables using new API
 const schema = new Schema({
   users: new Table({
     id: column.text,
@@ -125,15 +124,12 @@ const schema = new Schema({
 
 export const powersync = new PowerSyncDatabase({
   schema,
-  database: {
-    dbFilename: "powerchat.db",
-  },
+  database: { dbFilename: "powerchat.db" },
 });
+const connector = new PowerChatConnector();
 
 const logger = createBaseLogger();
 logger.setLevel(LogLevel.DEBUG);
-
-const connector = new PowerChatConnector();
 
 let isInitialized = false;
 

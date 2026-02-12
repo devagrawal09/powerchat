@@ -26,6 +26,7 @@ describe("MentionAutocomplete", () => {
       <MentionAutocomplete
         channelId="test-channel"
         mentionQuery=""
+        mentionType="@"
         isOpen={false}
         activeIndex={0}
         onSelect={vi.fn()}
@@ -40,6 +41,7 @@ describe("MentionAutocomplete", () => {
       <MentionAutocomplete
         channelId="test-channel"
         mentionQuery="ass"
+        mentionType="@"
         isOpen={true}
         activeIndex={0}
         onSelect={vi.fn()}
@@ -56,6 +58,7 @@ describe("MentionAutocomplete", () => {
       <MentionAutocomplete
         channelId="test-channel"
         mentionQuery=""
+        mentionType="@"
         isOpen={true}
         activeIndex={0}
         onSelect={onSelect}
@@ -75,6 +78,7 @@ describe("MentionAutocomplete", () => {
       <MentionAutocomplete
         channelId="test-channel"
         mentionQuery=""
+        mentionType="@"
         isOpen={true}
         activeIndex={0}
         onSelect={vi.fn()}
@@ -93,6 +97,7 @@ describe("MentionAutocomplete", () => {
       <MentionAutocomplete
         channelId="test-channel"
         mentionQuery=""
+        mentionType="@"
         isOpen={true}
         activeIndex={0}
         onSelect={vi.fn()}

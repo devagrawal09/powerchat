@@ -1,15 +1,17 @@
-import { createEffect, onCleanup } from 'solid-js';
-import { createStore, reconcile } from 'solid-js/store';
-import type { AbstractPowerSyncDatabase, CompilableQuery, ParsedQuery } from '@powersync/common';
-import { parseQuery } from '@powersync/common';
-import type { QueryResult, UseSingleQueryOptions } from '../../types.js';
-import { isServerSide, resolveInitialLoading } from '../../internal/ssr.js';
-import { usePowerSync } from '../../context.js';
-import type { Accessor } from 'solid-js';
+import { createResource, createSignal, type Accessor } from "solid-js";
+import type {
+  AbstractPowerSyncDatabase,
+  CompilableQuery,
+  ParsedQuery,
+} from "@powersync/common";
+import { parseQuery } from "@powersync/common";
+import type { QueryResult, UseSingleQueryOptions } from "../../types.js";
+import { isServerSide } from "../../internal/ssr.js";
+import { usePowerSync } from "../../context.js";
 
 const resolveDb = (
   dbOption: Accessor<AbstractPowerSyncDatabase | null> | undefined,
-  contextDb: AbstractPowerSyncDatabase | null
+  contextDb: AbstractPowerSyncDatabase | null,
 ) => {
   if (dbOption) {
     return dbOption();
@@ -19,7 +21,7 @@ const resolveDb = (
 };
 
 const wrapError = (error: Error) => {
-  const wrapped = new Error('PowerSync failed to fetch data: ' + error.message);
+  const wrapped = new Error("PowerSync failed to fetch data: " + error.message);
   wrapped.cause = error;
   return wrapped;
 };
@@ -27,22 +29,29 @@ const wrapError = (error: Error) => {
 export const useSingleQuery = <T = unknown>(
   query: Accessor<string | CompilableQuery<T>>,
   params: Accessor<unknown[]> = () => [],
-  options: Accessor<UseSingleQueryOptions> = () => ({})
+  options: Accessor<UseSingleQueryOptions> = () => ({}),
 ): QueryResult<T> => {
   const contextDb = usePowerSync();
   const initialOptions = options();
-  const [state, setState] = createStore<QueryResult<T>>({
-    data: [],
-    isLoading: resolveInitialLoading(initialOptions.ssr),
-    isFetching: resolveInitialLoading(initialOptions.ssr),
-    error: undefined
-  });
 
-  let refreshImpl: (signal?: AbortSignal) => Promise<void> = async () => undefined;
+  // Track if this is the initial load vs a refetch
+  const [hasInitialData, setHasInitialData] = createSignal(false);
 
-  createEffect(() => {
+  // Manual refresh trigger
+  const [refreshTrigger, setRefreshTrigger] = createSignal(0);
+
+  // Create a source signal that tracks all the reactive dependencies
+  const source = ():
+    | {
+        query: string | CompilableQuery<T>;
+        params: unknown[];
+        db: AbstractPowerSyncDatabase | null;
+        active: boolean;
+        refreshTrigger: number;
+      }
+    | false => {
     if (isServerSide()) {
-      return;
+      return false;
     }
 
     const currentOptions = options();
@@ -50,98 +59,63 @@ export const useSingleQuery = <T = unknown>(
     const active = currentOptions.active ? currentOptions.active() : true;
 
     if (!active) {
-      setState(
-        reconcile({
-          data: [],
-          isLoading: true,
-          isFetching: false,
-          error: undefined
-        })
-      );
-      return;
+      return false;
     }
 
     if (!currentDb) {
-      setState(
-        reconcile({
-          data: [],
-          isLoading: false,
-          isFetching: false,
-          error: new Error('PowerSync not configured.')
-        })
-      );
-      return;
+      return false;
     }
 
-    const currentQuery = query();
-    const currentParams = params();
-
-    let parsedQuery: ParsedQuery;
-    try {
-      parsedQuery = parseQuery(currentQuery, currentParams);
-    } catch (error) {
-      setState(
-        reconcile({
-          data: [],
-          isLoading: false,
-          isFetching: false,
-          error: wrapError(error as Error)
-        })
-      );
-      return;
-    }
-
-    let cancelled = false;
-    const abortController = new AbortController();
-
-    refreshImpl = async (signal?: AbortSignal) => {
-      setState('isLoading', true);
-      setState('isFetching', true);
-      setState('error', undefined);
-
-      try {
-        const result =
-          typeof currentQuery === 'string'
-            ? await currentDb.getAll<T>(parsedQuery.sqlStatement, parsedQuery.parameters)
-            : await currentQuery.execute();
-
-        if (cancelled || signal?.aborted || abortController.signal.aborted) {
-          return;
-        }
-
-        setState(
-          reconcile({
-            data: result,
-            isLoading: false,
-            isFetching: false,
-            error: undefined
-          })
-        );
-      } catch (error) {
-        if (cancelled || signal?.aborted || abortController.signal.aborted) {
-          return;
-        }
-
-        setState(
-          reconcile({
-            data: [],
-            isLoading: false,
-            isFetching: false,
-            error: wrapError(error as Error)
-          })
-        );
-      }
+    return {
+      query: query(),
+      params: params(),
+      db: currentDb,
+      active,
+      refreshTrigger: refreshTrigger(),
     };
+  };
 
-    refreshImpl(abortController.signal);
+  const [resource] = createResource(
+    source,
+    async (src) => {
+      // let parsedQuery: ParsedQuery;
+      try {
+        const parsedQuery = parseQuery(src.query, src.params);
 
-    onCleanup(() => {
-      cancelled = true;
-      abortController.abort();
-    });
-  });
+        let result: T[];
+        if (typeof src.query === "string") {
+          result = await src.db!.getAll<T>(
+            parsedQuery.sqlStatement,
+            parsedQuery.parameters,
+          );
+        } else {
+          result = await src.query.execute();
+        }
 
-  return Object.assign(state, {
-    refresh: (signal?: AbortSignal) => refreshImpl(signal)
-  });
+        setHasInitialData(true);
+        return result;
+      } catch (error) {
+        throw wrapError(error as Error);
+      }
+    },
+    { initialValue: [] as T[] },
+  );
+
+  // Return a state object that mirrors the old API but is backed by the resource
+  // The resource itself provides Suspense support
+  return {
+    get data() {
+      return resource() ?? [];
+    },
+    get isLoading() {
+      return resource.loading && !hasInitialData();
+    },
+    get error() {
+      return resource.error;
+    },
+    refresh: async (signal?: AbortSignal) => {
+      if (signal?.aborted) return;
+      setRefreshTrigger((t) => t + 1);
+    },
+  };
 };

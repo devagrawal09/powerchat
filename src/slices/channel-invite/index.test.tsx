@@ -2,195 +2,132 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@solidjs/testing-library";
 import { ChannelInvite } from "./index";
 
-// Mock dependencies
-vi.mock("./action", () => ({
-  inviteByUsername: vi.fn(),
-  inviteAgent: vi.fn(),
+const { mockExecute, mockWriteTransaction } = vi.hoisted(() => {
+  const execute = vi.fn();
+  return {
+    mockExecute: execute,
+    mockWriteTransaction: vi.fn(async (cb: any) => cb({ execute })),
+  };
+});
+
+let queryData = {
+  allAgents: [{ id: "agent-1", name: "Assistant", description: "Helpful" }],
+  channelAgents: [] as Array<{ member_id: string }>,
+  allUsers: [{ id: "alice" }, { id: "bob" }],
+  channelMembers: [{ member_id: "alice" }],
+};
+
+vi.mock("~/lib/getUsername", () => ({
+  getUsername: vi.fn(() => "alice"),
+}));
+
+vi.mock("~/lib/powersync-solid", () => ({
+  usePowerSync: vi.fn(() => ({
+    writeTransaction: mockWriteTransaction,
+  })),
+  useQuery: vi.fn((query: () => string) => () => {
+    const sql = query();
+    if (sql.includes("FROM agents")) {
+      return { data: queryData.allAgents, isLoading: false, error: undefined };
+    }
+    if (sql.includes("member_type = 'agent'")) {
+      return {
+        data: queryData.channelAgents,
+        isLoading: false,
+        error: undefined,
+      };
+    }
+    if (sql.includes("SELECT id FROM users")) {
+      return { data: queryData.allUsers, isLoading: false, error: undefined };
+    }
+    if (sql.includes("SELECT member_id FROM channel_members WHERE channel_id = ?")) {
+      return {
+        data: queryData.channelMembers,
+        isLoading: false,
+        error: undefined,
+      };
+    }
+    return { data: [], isLoading: false, error: undefined };
+  }),
 }));
 
 describe("ChannelInvite", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryData = {
+      allAgents: [{ id: "agent-1", name: "Assistant", description: "Helpful" }],
+      channelAgents: [],
+      allUsers: [{ id: "alice" }, { id: "bob" }],
+      channelMembers: [{ member_id: "alice" }],
+    };
   });
 
-  it("renders invite form", () => {
+  it("renders invite form with tabs", () => {
     render(() => <ChannelInvite channelId="test-channel" />);
-
-    expect(screen.getByText("Invite by Username")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Enter username")).toBeInTheDocument();
-    expect(screen.getByText("Add User")).toBeInTheDocument();
+    expect(screen.getByText("Invite")).toBeInTheDocument();
+    expect(screen.getByText("User")).toBeInTheDocument();
+    expect(screen.getByText("Agent")).toBeInTheDocument();
+    expect(screen.getByText("Add User")).toBeDisabled();
   });
 
-  it("validates empty username", async () => {
-    render(() => <ChannelInvite channelId="test-channel" />);
+  it("shows error when current user is not a channel member", async () => {
+    queryData.channelMembers = [{ member_id: "bob" }];
 
-    const form = screen.getByText("Add User").closest("form")!;
-    fireEvent.submit(form);
+    render(() => <ChannelInvite channelId="test-channel" />);
+    fireEvent.input(screen.getByPlaceholderText("Enter username"), {
+      target: { value: "bob" },
+    });
+    fireEvent.click(screen.getByText("Add User"));
 
     await waitFor(() => {
-      expect(screen.getByText("Please enter a username")).toBeInTheDocument();
+      expect(
+        screen.getByText("You must be a member of this channel to invite users"),
+      ).toBeInTheDocument();
     });
   });
 
-  it("calls inviteByUsername with correct data", async () => {
-    const { inviteByUsername } = await import("./action");
-    vi.mocked(inviteByUsername).mockResolvedValue({ success: true });
-
+  it("invites a user through writeTransaction", async () => {
     render(() => <ChannelInvite channelId="test-channel-123" />);
 
-    const input = screen.getByPlaceholderText("Enter username");
-    const button = screen.getByText("Add User");
-
-    fireEvent.input(input, { target: { value: "newuser" } });
-    fireEvent.click(button);
+    fireEvent.input(screen.getByPlaceholderText("Enter username"), {
+      target: { value: "bob" },
+    });
+    fireEvent.click(screen.getByText("Add User"));
 
     await waitFor(() => {
-      expect(inviteByUsername).toHaveBeenCalled();
+      expect(mockWriteTransaction).toHaveBeenCalled();
+      expect(screen.getByText("bob added to channel!")).toBeInTheDocument();
     });
 
-    const callArgs = vi.mocked(inviteByUsername).mock.calls[0][0];
-    expect(callArgs.get("channelId")).toBe("test-channel-123");
-    expect(callArgs.get("username")).toBe("newuser");
+    const executeArgs = mockExecute.mock.calls[0][1];
+    expect(executeArgs[1]).toBe("test-channel-123");
+    expect(executeArgs[2]).toBe("bob");
+    expect(screen.getByPlaceholderText("Enter username")).toHaveValue("");
   });
 
-  it("displays success message and clears input after successful invite", async () => {
-    const { inviteByUsername } = await import("./action");
-    vi.mocked(inviteByUsername).mockResolvedValue({ success: true });
-
+  it("shows agent picker with available agents", () => {
     render(() => <ChannelInvite channelId="test-channel" />);
+    fireEvent.click(screen.getByText("Agent"));
 
-    const input = screen.getByPlaceholderText(
-      "Enter username"
-    ) as HTMLInputElement;
-    const button = screen.getByText("Add User");
+    expect(screen.getByText("Add Agent")).toBeDisabled();
+    expect(screen.getByRole("option", { name: "Assistant" })).toBeInTheDocument();
+  });
 
-    fireEvent.input(input, { target: { value: "newuser" } });
-    fireEvent.click(button);
+  it("invites selected agent through writeTransaction", async () => {
+    render(() => <ChannelInvite channelId="test-channel" />);
+    fireEvent.click(screen.getByText("Agent"));
+
+    fireEvent.change(screen.getByRole("combobox"), {
+      target: { value: "agent-1" },
+    });
+    fireEvent.click(screen.getByText("Add Agent"));
 
     await waitFor(() => {
-      expect(screen.getByText("newuser added to channel!")).toBeInTheDocument();
+      expect(mockWriteTransaction).toHaveBeenCalled();
+      expect(screen.getByText("Assistant added to channel!")).toBeInTheDocument();
     });
 
-    expect(input.value).toBe("");
-  });
-
-  it("displays error message when invite fails", async () => {
-    const { inviteByUsername } = await import("./action");
-    vi.mocked(inviteByUsername).mockResolvedValue({
-      error: "User not found",
-    });
-
-    render(() => <ChannelInvite channelId="test-channel" />);
-
-    const input = screen.getByPlaceholderText("Enter username");
-    const button = screen.getByText("Add User");
-
-    fireEvent.input(input, { target: { value: "nonexistent" } });
-    fireEvent.click(button);
-
-    await waitFor(() => {
-      expect(screen.getByText("User not found")).toBeInTheDocument();
-    });
-  });
-
-  it("shows 'Adding...' while submitting", async () => {
-    const { inviteByUsername } = await import("./action");
-    vi.mocked(inviteByUsername).mockImplementation(
-      () =>
-        new Promise((resolve) =>
-          setTimeout(() => resolve({ success: true }), 1000)
-        )
-    );
-
-    render(() => <ChannelInvite channelId="test-channel" />);
-
-    const input = screen.getByPlaceholderText("Enter username");
-    const button = screen.getByText("Add User");
-
-    fireEvent.input(input, { target: { value: "newuser" } });
-    fireEvent.click(button);
-
-    await waitFor(() => {
-      expect(screen.getByText("Adding...")).toBeInTheDocument();
-    });
-  });
-
-  it("disables input and button while submitting", async () => {
-    const { inviteByUsername } = await import("./action");
-    vi.mocked(inviteByUsername).mockImplementation(
-      () =>
-        new Promise((resolve) =>
-          setTimeout(() => resolve({ success: true }), 1000)
-        )
-    );
-
-    render(() => <ChannelInvite channelId="test-channel" />);
-
-    const input = screen.getByPlaceholderText(
-      "Enter username"
-    ) as HTMLInputElement;
-    const button = screen.getByText("Add User") as HTMLButtonElement;
-
-    fireEvent.input(input, { target: { value: "newuser" } });
-    fireEvent.click(button);
-
-    await waitFor(() => {
-      expect(input.disabled).toBe(true);
-      expect(button.disabled).toBe(true);
-    });
-  });
-
-  it("disables button when input is empty", () => {
-    render(() => <ChannelInvite channelId="test-channel" />);
-
-    const button = screen.getByText("Add User") as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
-  });
-
-  it("enables button when input has value", () => {
-    render(() => <ChannelInvite channelId="test-channel" />);
-
-    const input = screen.getByPlaceholderText("Enter username");
-    const button = screen.getByText("Add User") as HTMLButtonElement;
-
-    fireEvent.input(input, { target: { value: "newuser" } });
-    expect(button.disabled).toBe(false);
-  });
-
-  it("trims whitespace from username", async () => {
-    const { inviteByUsername } = await import("./action");
-    vi.mocked(inviteByUsername).mockResolvedValue({ success: true });
-
-    render(() => <ChannelInvite channelId="test-channel" />);
-
-    const input = screen.getByPlaceholderText("Enter username");
-    const button = screen.getByText("Add User");
-
-    fireEvent.input(input, { target: { value: "  newuser  " } });
-    fireEvent.click(button);
-
-    await waitFor(() => {
-      expect(inviteByUsername).toHaveBeenCalled();
-    });
-
-    const callArgs = vi.mocked(inviteByUsername).mock.calls[0][0];
-    expect(callArgs.get("username")).toBe("newuser");
-  });
-
-  it("handles exception from server", async () => {
-    const { inviteByUsername } = await import("./action");
-    vi.mocked(inviteByUsername).mockRejectedValue(new Error("Network error"));
-
-    render(() => <ChannelInvite channelId="test-channel" />);
-
-    const input = screen.getByPlaceholderText("Enter username");
-    const button = screen.getByText("Add User");
-
-    fireEvent.input(input, { target: { value: "newuser" } });
-    fireEvent.click(button);
-
-    await waitFor(() => {
-      expect(screen.getByText("Network error")).toBeInTheDocument();
-    });
+    const executeArgs = mockExecute.mock.calls[0][1];
+    expect(executeArgs[2]).toBe("agent-1");
   });
 });

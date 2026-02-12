@@ -28,7 +28,7 @@ export async function getPowerSyncToken() {
   const instanceUrl = process.env.POWERSYNC_SERVICE_URL;
   if (!kid || !secretB64url || !instanceUrl)
     throw new Error(
-      "POWERSYNC_JWT_KID, POWERSYNC_JWT_SECRET, or POWERSYNC_SERVICE_URL not set"
+      "POWERSYNC_JWT_KID, POWERSYNC_JWT_SECRET, or POWERSYNC_SERVICE_URL not set",
     );
 
   const key = base64urlToBytes(secretB64url);
@@ -52,7 +52,7 @@ export async function uploadData(
     table: string;
     id: string;
     opData: Record<string, any>;
-  }[]
+  }[],
 ) {
   console.log("[uploadData] transactions", transactions.length);
 
@@ -69,11 +69,11 @@ export async function uploadData(
           const putCols = Object.keys(opData).filter((k) => k !== "id");
           const putVals = putCols.map((k) => opData[k]);
           await query(
-            `INSERT INTO ${tableName} (id, ${putCols.join(", ")}) 
+            `INSERT INTO ${tableName} (id, ${putCols.join(", ")})
              VALUES ($1, ${putCols.map((_, i) => `$${i + 2}`).join(", ")})
-             ON CONFLICT (id) DO UPDATE SET 
+             ON CONFLICT (id) DO UPDATE SET
              ${putCols.map((k) => `${k} = EXCLUDED.${k}`).join(", ")}`,
-            [id, ...putVals]
+            [id, ...putVals],
           );
           break;
 
@@ -85,10 +85,10 @@ export async function uploadData(
           const patchVals = patchCols.map((k) => opData[k]);
           if (!patchCols.length) break;
           await query(
-            `UPDATE ${tableName} 
+            `UPDATE ${tableName}
              SET ${patchCols.map((k, i) => `${k} = $${i + 1}`).join(", ")}
              WHERE id = $${patchCols.length + 1}`,
-            [...patchVals, id]
+            [...patchVals, id],
           );
           break;
 

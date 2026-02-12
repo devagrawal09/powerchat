@@ -1,5 +1,10 @@
-import { createEffect, onCleanup } from "solid-js";
-import { createStore, reconcile } from "solid-js/store";
+import {
+  createEffect,
+  createResource,
+  createSignal,
+  onCleanup,
+  type Accessor,
+} from "solid-js";
 import type {
   AbstractPowerSyncDatabase,
   CompilableQuery,
@@ -11,9 +16,8 @@ import type {
   UseWatchedQueryHookOptions,
   WatchedQueryState,
 } from "../../types.js";
-import { isServerSide, resolveInitialLoading } from "../../internal/ssr.js";
+import { isServerSide } from "../../internal/ssr.js";
 import { usePowerSync } from "../../context.js";
-import type { Accessor } from "solid-js";
 
 const resolveDb = (
   dbOption: Accessor<AbstractPowerSyncDatabase | null> | undefined,
@@ -38,14 +42,76 @@ export const useWatchedQuery = <T = unknown>(
   options: Accessor<UseWatchedQueryHookOptions<T>> = () => ({}),
 ): WatchedQueryState<T> => {
   const contextDb = usePowerSync();
-  const initialOptions = options();
-  const [state, setState] = createStore<WatchedQueryState<T>>({
-    data: [],
-    isLoading: resolveInitialLoading(initialOptions.ssr),
-    isFetching: resolveInitialLoading(initialOptions.ssr),
-    error: undefined,
+
+  // Use a signal to trigger refetches from watch updates
+  const [trigger, setTrigger] = createSignal(0);
+  createEffect(() => {
+    console.log({ trigger: trigger() });
   });
 
+  // Track if this is the initial load vs a refetch
+  const [hasInitialData, setHasInitialData] = createSignal(false);
+
+  // Create a source signal that tracks all the reactive dependencies
+  const source = () => {
+    if (isServerSide()) {
+      return null;
+    }
+
+    const currentOptions = options();
+    const currentDb = resolveDb(currentOptions.db, contextDb);
+    const active = currentOptions.active ? currentOptions.active() : true;
+
+    if (!active) {
+      return null;
+    }
+
+    if (!currentDb) {
+      return null;
+    }
+
+    return {
+      query: query(),
+      params: params(),
+      options: currentOptions,
+      db: currentDb,
+      active,
+      trigger: trigger(),
+    };
+  };
+
+  const [resource] = createResource(
+    source,
+    async (src) => {
+      // console.log(`starting`, src.query, src.params);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      let parsedQuery: ParsedQuery;
+      try {
+        parsedQuery = parseQuery(src.query, src.params);
+      } catch (error) {
+        throw wrapError(error as Error);
+      }
+
+      // Execute the query
+      let result: T[];
+      if (typeof src.query === "string") {
+        result = await src.db!.getAll<T>(
+          parsedQuery.sqlStatement,
+          parsedQuery.parameters,
+        );
+      } else {
+        result = await src.query.execute();
+      }
+
+      setHasInitialData(true);
+      return result as ReadonlyArray<Readonly<T>>;
+    },
+    {
+      initialValue: [] as ReadonlyArray<Readonly<T>>,
+    },
+  );
+
+  // Set up the watch subscription for live updates
   createEffect(() => {
     if (isServerSide()) {
       return;
@@ -55,33 +121,9 @@ export const useWatchedQuery = <T = unknown>(
     const currentDb = resolveDb(currentOptions.db, contextDb);
     const active = currentOptions.active ? currentOptions.active() : true;
 
-    if (!active) {
-      setState(
-        reconcile({
-          data: [],
-          isLoading: true,
-          isFetching: false,
-          error: undefined,
-        }),
-      );
+    if (!active || !currentDb) {
       return;
     }
-
-    if (!currentDb) {
-      setState(
-        reconcile({
-          data: [],
-          isLoading: false,
-          isFetching: false,
-          error: new Error("PowerSync not configured."),
-        }),
-      );
-      return;
-    }
-
-    setState("isLoading", true);
-    setState("isFetching", true);
-    setState("error", undefined);
 
     let parsedQuery: ParsedQuery;
     const queryValue = query();
@@ -89,15 +131,7 @@ export const useWatchedQuery = <T = unknown>(
 
     try {
       parsedQuery = parseQuery(queryValue, currentParams);
-    } catch (error) {
-      setState(
-        reconcile({
-          data: [],
-          isLoading: false,
-          isFetching: false,
-          error: wrapError(error as Error),
-        }),
-      );
+    } catch {
       return;
     }
 
@@ -126,25 +160,9 @@ export const useWatchedQuery = <T = unknown>(
         });
 
     const disposer = watch.registerListener({
-      onStateChange: (updatedState) => {
-        if (updatedState.error) {
-          setState(
-            reconcile({
-              data: [],
-              isLoading: false,
-              isFetching: false,
-              error: wrapError(updatedState.error as Error),
-            }),
-          );
-        } else {
-          setState(
-            reconcile({
-              data: updatedState.data,
-              isLoading: false,
-              isFetching: false,
-            }),
-          );
-        }
+      onStateChange: () => {
+        // Trigger a refetch by updating the trigger signal
+        setTrigger((t) => t + 1);
       },
     });
 
@@ -154,5 +172,19 @@ export const useWatchedQuery = <T = unknown>(
     });
   });
 
-  return state;
+  // Return a state object that mirrors the old API but is backed by the resource
+  // The resource itself provides Suspense support - accessing data() in a Suspense boundary
+  // will automatically suspend until data is available
+  return {
+    get data() {
+      // This getter will cause Suspense to kick in when accessed
+      return resource() ?? [];
+    },
+    get isLoading() {
+      return resource.loading && !hasInitialData();
+    },
+    get error() {
+      return resource.error;
+    },
+  };
 };

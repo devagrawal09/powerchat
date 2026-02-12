@@ -19,6 +19,7 @@ type ChatMessagesProps = {
 };
 
 export function ChatMessages(props: ChatMessagesProps) {
+  console.log(`ChatMessages props: ${JSON.stringify(props)}`);
   let scrollContainer: HTMLDivElement | undefined;
   const powersync = usePowerSync();
 
@@ -84,16 +85,6 @@ export function ChatMessages(props: ChatMessagesProps) {
     return mentions.includes(normalizedUsername);
   };
 
-  // Check if message belongs to current user
-  const isOwnMessage = (message: MessageRow) => {
-    const username = currentUsername();
-    return (
-      message.author_type === "user" &&
-      username !== null &&
-      message.author_id === username
-    );
-  };
-
   // Delete message handler
   const handleDeleteMessage = async (messageId: string) => {
     if (!powersync) {
@@ -112,59 +103,54 @@ export function ChatMessages(props: ChatMessagesProps) {
       class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50"
     >
       <Show
-        when={!messages().isLoading}
-        fallback={<div class="text-sm text-gray-500">Loading messages...</div>}
+        when={messages().data.length > 0}
+        fallback={<div class="text-sm text-gray-500">No messages yet</div>}
       >
-        <Show
-          when={messages().data.length > 0}
-          fallback={<div class="text-sm text-gray-500">No messages yet</div>}
-        >
-          <For each={messages().data}>
-            {(message) => {
-              const authorName = createMemo(() => getAuthorName(message));
-              const mentioned = createMemo(() => isMentioned(message.content));
+        <For each={messages().data}>
+          {(message) => {
+            const authorName = createMemo(() => getAuthorName(message));
+            const mentioned = createMemo(() => isMentioned(message.content));
 
-              return (
-                <div
-                  class={`group flex gap-3 p-2 rounded-lg ${
-                    mentioned() ? "bg-blue-50 border-l-4 border-blue-400" : ""
-                  }`}
-                >
-                  <div class="shrink-0 w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-xs font-semibold text-gray-700">
-                    {authorName()?.[0]?.toUpperCase() || "?"}
+            return (
+              <div
+                class={`group flex gap-3 p-2 rounded-lg ${
+                  mentioned() ? "bg-blue-50 border-l-4 border-blue-400" : ""
+                }`}
+              >
+                <div class="shrink-0 w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-xs font-semibold text-gray-700">
+                  {authorName()?.[0]?.toUpperCase() || "?"}
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-baseline gap-2 justify-between">
+                    <div class="flex items-baseline gap-2">
+                      <span class="font-semibold text-sm text-gray-900">
+                        {authorName()}
+                      </span>
+                      <span class="text-xs text-gray-500">
+                        {new Date(message.created_at).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      class="text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 focus:opacity-100 text-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleDeleteMessage(message.id);
+                      }}
+                      aria-label="Delete message"
+                    >
+                      ×
+                    </button>
                   </div>
-                  <div class="flex-1">
-                    <div class="flex items-baseline gap-2 justify-between">
-                      <div class="flex items-baseline gap-2">
-                        <span class="font-semibold text-sm text-gray-900">
-                          {authorName()}
-                        </span>
-                        <span class="text-xs text-gray-500">
-                          {new Date(message.created_at).toLocaleTimeString()}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        class="text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 focus:opacity-100 text-xs"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          e.preventDefault();
-                          handleDeleteMessage(message.id);
-                        }}
-                        aria-label="Delete message"
-                      >
-                        ×
-                      </button>
-                    </div>
-                    <div class="text-sm mt-1 text-gray-900">
-                      <RenderMarkdown>{message.content}</RenderMarkdown>
-                    </div>
+                  <div class="text-sm mt-1 text-gray-900">
+                    <RenderMarkdown>{message.content}</RenderMarkdown>
                   </div>
                 </div>
-              );
-            }}
-          </For>
-        </Show>
+              </div>
+            );
+          }}
+        </For>
       </Show>
     </div>
   );

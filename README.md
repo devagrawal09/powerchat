@@ -96,7 +96,7 @@ Visit `http://localhost:3000`
 2. **Invite an Agent**: Use the agent invite UI in a channel
 3. **Send Messages**: Type in the input box
 4. **Mention Agents**: Use `@AgentName` in your message to trigger AI reply
-5. **Mention Documents**: Use `#DocumentTitle` to reference documents created by agents
+5. **Mention Documents**: Use `#DocumentTitle` to reference documents
 6. **View Documents**: Click on documents in the right sidebar to view full content
 7. **View Agent Details**: Click on agents in the right sidebar to see their description and instructions
 
@@ -207,22 +207,8 @@ bun test
 
 - Messages are written to local PowerSync SQLite DB instantly
 - PowerSync queues uploads to the service
-- Server confirms and agent triggers run server-side
+- Server confirms writes
 - Replies sync back automatically
-
-### Agent Flow
-
-1. Client detects `@agent` in message
-2. Calls `triggerAgent` server function
-3. Server fetches recent context from Neon (messages, users, agents, documents)
-4. Server provides agent with:
-   - List of other agents in channel (encourages delegation)
-   - List of available documents (for knowledge transfer)
-   - Document management tools (list, create, read)
-5. Mastra calls OpenAI GPT-5
-6. Agent reply inserted into Neon
-7. PowerSync syncs reply to all clients
-8. Agent interactions logged to `logs/agent-{id}-{timestamp}.log`
 
 ### Document Management
 
@@ -234,15 +220,6 @@ Agents can create, list, and read markdown documents within channels:
 - **Document Mentions**: Users and agents can reference documents with `#DocumentTitle`
 - **Document Viewer**: Click documents in sidebar to view full content (replaces chat view)
 - **Agent Instructions**: Agents are instructed to keep responses concise (2-4 sentences) and use documents for detailed information
-
-### Agent Delegation
-
-Agents are encouraged to delegate tasks to specialized agents:
-
-- Agents receive a list of other agents in the channel as context
-- Instructions guide agents to delegate when another agent's expertise matches the task
-- Delegation syntax: Use `@agentname` only when explicitly delegating (not when describing)
-- Sequential delegation: Agents delegate sequentially when tasks depend on each other
 
 ### Key Files
 
@@ -262,7 +239,6 @@ Agents are encouraged to delegate tasks to specialized agents:
 
 - No server-side validation of mentions/membership
 - Anonymous users only (no proper auth)
-- Single agent response per mention (no multi-agent parallel execution)
 - No streaming (simple text replies)
 - In-memory idempotency (resets on server restart)
 - Documents can only be created by agents (no client-side uploads)

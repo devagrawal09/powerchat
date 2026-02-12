@@ -41,35 +41,10 @@ class PowerChatServerConnector implements PowerSyncBackendConnector {
   }
 }
 
+const logger = createBaseLogger();
+logger.setLevel(LogLevel.INFO);
+
 const schema = new Schema({
-  users: new Table({
-    id: column.text,
-    created_at: column.text,
-  }),
-  agents: new Table({
-    id: column.text,
-    name: column.text,
-    model_config: column.text,
-    system_instructions: column.text,
-    description: column.text,
-    created_at: column.text,
-  }),
-  channels: new Table({
-    id: column.text,
-    name: column.text,
-    created_by: column.text,
-    created_at: column.text,
-  }),
-  channel_members: new Table(
-    {
-      id: column.text,
-      channel_id: column.text,
-      member_type: column.text,
-      member_id: column.text,
-      joined_at: column.text,
-    },
-    { indexes: { idx_channel_members_member: ["member_type", "member_id"] } },
-  ),
   messages: new Table(
     {
       id: column.text,
@@ -86,25 +61,7 @@ const schema = new Schema({
       },
     },
   ),
-  documents: new Table(
-    {
-      id: column.text,
-      channel_id: column.text,
-      title: column.text,
-      description: column.text,
-      content: column.text,
-      created_at: column.text,
-    },
-    {
-      indexes: {
-        idx_documents_channel: ["channel_id"],
-      },
-    },
-  ),
 });
-
-const logger = createBaseLogger();
-logger.setLevel(LogLevel.INFO);
 
 let db: PowerSyncDatabase | null = null;
 let initPromise: Promise<PowerSyncDatabase> | null = null;
@@ -131,17 +88,11 @@ export async function getPowerSyncNode(): Promise<PowerSyncDatabase> {
     const dbLocation = join(process.cwd(), ".powersync");
     const dbFilename = "powerchat-server.db";
     await mkdir(dbLocation, { recursive: true });
-    console.log("[powersync-node] initializing", {
-      dbLocation,
-      dbFilename,
-    });
+    console.log("[powersync-node] initializing", { dbLocation, dbFilename });
 
     const database = new PowerSyncDatabase({
       schema,
-      database: {
-        dbFilename,
-        dbLocation,
-      },
+      database: { dbFilename, dbLocation },
       logger,
     });
 

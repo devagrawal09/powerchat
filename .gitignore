@@ -30,3 +30,7 @@ Thumbs.db
 # Logs
 /logs
 /.powersync
+
+.automaker
+
+test-results

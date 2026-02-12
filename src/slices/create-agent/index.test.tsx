@@ -79,15 +79,16 @@ describe("CreateAgent", () => {
     expect(submitButton.disabled).toBe(false);
   });
 
-  it("shows validation error for empty name", async () => {
+  it("keeps submit disabled when fields are empty", async () => {
     render(() => <CreateAgent channelId="test-channel" />);
     const button = screen.getByText("Create Agent");
     fireEvent.click(button);
-    const submitButton = screen.getByText("Create");
+    const submitButton = screen.getByText("Create") as HTMLButtonElement;
+    expect(submitButton.disabled).toBe(true);
     fireEvent.click(submitButton);
 
     await waitFor(() => {
-      expect(screen.getByText("All fields are required")).toBeInTheDocument();
+      expect(screen.queryByText("All fields are required")).not.toBeInTheDocument();
     });
   });
 

@@ -55,9 +55,7 @@ describe("DocumentViewer", () => {
   it("renders document content", () => {
     const onClose = vi.fn();
     render(() => <DocumentViewer documentId="test-doc" onClose={onClose} />);
-    expect(
-      screen.getByText("# Content\n\nTest content here")
-    ).toBeInTheDocument();
+    expect(screen.getByText(/# Content\s+Test content here/)).toBeInTheDocument();
   });
 
   it("shows default title when document not loaded", async () => {

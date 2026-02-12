@@ -76,7 +76,6 @@ export async function onMessage(message: MessageRow): Promise<void> {
       agentMessageId,
       content,
       message.author_id,
-      0,
     );
 
     console.log("[onMessage] agent response complete", {

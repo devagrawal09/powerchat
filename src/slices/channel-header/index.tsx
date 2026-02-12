@@ -1,4 +1,3 @@
-import { Show } from "solid-js";
 import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 
 type ChannelRow = {
@@ -15,21 +14,14 @@ type ChannelHeaderProps = {
 export function ChannelHeader(props: ChannelHeaderProps) {
   const channel = useQuery<ChannelRow>(
     () => `SELECT * FROM channels WHERE id = ?`,
-    () => [props.channelId]
+    () => [props.channelId],
   );
 
   const channelName = () => channel().data?.[0]?.name;
 
   return (
     <div class="border-b border-gray-200 p-4 bg-white">
-      <Show
-        when={!channel().isLoading}
-        fallback={
-          <div class="text-lg font-semibold text-gray-900">Loading...</div>
-        }
-      >
-        <h2 class="text-lg font-semibold text-gray-900"># {channelName()}</h2>
-      </Show>
+      <h2 class="text-lg font-semibold text-gray-900"># {channelName()}</h2>
     </div>
   );
 }

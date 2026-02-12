@@ -65,9 +65,7 @@ export function ChatInput(props: ChatInputProps) {
     return memberState; // default to member state for type
   });
 
-  // Query members for agent mention detection and resolution
-  // Note: This query is needed for the mutation logic (resolving agent IDs from mentions)
-  // The autocomplete UI is handled by the separate MentionAutocomplete slice
+  // Query members for mention autocomplete
   const members = useQuery<MemberRow>(
     () =>
       `SELECT cm.member_type, cm.member_id,

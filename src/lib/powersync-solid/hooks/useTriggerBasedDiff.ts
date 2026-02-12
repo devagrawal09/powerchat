@@ -1,14 +1,20 @@
-import { createEffect, onCleanup, type Accessor } from 'solid-js';
-import { createStore, reconcile } from 'solid-js/store';
-import type { AbstractPowerSyncDatabase, TriggerDiffHandlerContext } from '@powersync/common';
-import { DiffTriggerOperation } from '@powersync/common';
-import type { TriggerBasedDiffState, UseTriggerBasedDiffOptions } from '../types.js';
-import { isServerSide, resolveInitialLoading } from '../internal/ssr.js';
-import { usePowerSync } from '../context.js';
+import { createEffect, onCleanup, type Accessor } from "solid-js";
+import { createStore, reconcile } from "solid-js/store";
+import type {
+  AbstractPowerSyncDatabase,
+  TriggerDiffHandlerContext,
+} from "@powersync/common";
+import { DiffTriggerOperation } from "@powersync/common";
+import type {
+  TriggerBasedDiffState,
+  UseTriggerBasedDiffOptions,
+} from "../types.js";
+import { isServerSide, resolveInitialLoading } from "../internal/ssr.js";
+import { usePowerSync } from "../context.js";
 
 const resolveDb = (
   dbOption: Accessor<AbstractPowerSyncDatabase | null> | undefined,
-  contextDb: AbstractPowerSyncDatabase | null
+  contextDb: AbstractPowerSyncDatabase | null,
 ) => {
   if (dbOption) {
     return dbOption();
@@ -18,15 +24,14 @@ const resolveDb = (
 };
 
 export const useTriggerBasedDiff = <T = unknown>(
-  options: Accessor<UseTriggerBasedDiffOptions<T>>
+  options: Accessor<UseTriggerBasedDiffOptions<T>>,
 ): TriggerBasedDiffState<T> => {
   const contextDb = usePowerSync();
   const initialOptions = options();
   const [state, setState] = createStore<TriggerBasedDiffState<T>>({
     data: [],
     isLoading: resolveInitialLoading(initialOptions.ssr),
-    isFetching: resolveInitialLoading(initialOptions.ssr),
-    error: undefined
+    error: undefined,
   });
 
   createEffect(() => {
@@ -43,15 +48,14 @@ export const useTriggerBasedDiff = <T = unknown>(
           data: [],
           isLoading: false,
           isFetching: false,
-          error: new Error('PowerSync not configured.')
-        })
+          error: new Error("PowerSync not configured."),
+        }),
       );
       return;
     }
 
-    setState('isLoading', true);
-    setState('isFetching', true);
-    setState('error', undefined);
+    setState("isLoading", true);
+    setState("error", undefined);
 
     const source = currentOptions.source;
     const initialQuery = currentOptions.initialQuery;
@@ -66,12 +70,14 @@ export const useTriggerBasedDiff = <T = unknown>(
 
     (async () => {
       try {
-        const initialResult = await currentDb.execute(initialQuery, initialParams);
+        const initialResult = await currentDb.execute(
+          initialQuery,
+          initialParams,
+        );
         const initialRows = (initialResult?.rows?._array ?? []) as T[];
         if (!cancelled) {
-          setState('data', reconcile(initialRows));
-          setState('isLoading', false);
-          setState('isFetching', false);
+          setState("data", reconcile(initialRows));
+          setState("isLoading", false);
         }
 
         const whenClauses: Partial<Record<DiffTriggerOperation, string>> = {};
@@ -95,33 +101,34 @@ export const useTriggerBasedDiff = <T = unknown>(
             }
 
             try {
-              const allDiffs = await context.withDiff<{ id: string; operation: string }>(
-                /* sql */ `
+              const allDiffs = await context.withDiff<{
+                id: string;
+                operation: string;
+              }>(/* sql */ `
                   SELECT DIFF.id, DIFF.operation
                   FROM DIFF
-                `
-              );
+                `);
 
-              const insertedOrUpdatedRows = await context.withDiff<T & { __operation?: string }>(
-                /* sql */ `
+              const insertedOrUpdatedRows = await context.withDiff<
+                T & { __operation?: string }
+              >(/* sql */ `
                   SELECT ${source}.*, DIFF.operation as __operation
                   FROM DIFF
                   JOIN ${source} ON DIFF.id = ${source}.id
                   WHERE DIFF.operation IN ('INSERT', 'UPDATE')
-                `
-              );
+                `);
 
               const deletedIds = new Set(
                 allDiffs
-                  .filter((diff) => diff.operation === 'DELETE')
-                  .map((diff) => diff.id)
+                  .filter((diff) => diff.operation === "DELETE")
+                  .map((diff) => diff.id),
               );
 
               if (cancelled) {
                 return;
               }
 
-              setState('data', (currentData) => {
+              setState("data", (currentData) => {
                 const dataMap = new Map<string, { row: T; index: number }>();
                 currentData.forEach((row, index) => {
                   dataMap.set(getId(row), { row, index });
@@ -133,7 +140,7 @@ export const useTriggerBasedDiff = <T = unknown>(
                   const existing = dataMap.get(id);
                   dataMap.set(id, {
                     row: row as T,
-                    index: existing ? existing.index : currentData.length
+                    index: existing ? existing.index : currentData.length,
                   });
                 });
 
@@ -153,27 +160,28 @@ export const useTriggerBasedDiff = <T = unknown>(
               });
             } catch (error) {
               if (!cancelled) {
-                setState('error', error);
+                setState("error", error as Error);
               }
             }
           },
           hooks: {
             beforeCreate: async (lockContext) => {
-              const result = await lockContext.execute(initialQuery, initialParams);
+              const result = await lockContext.execute(
+                initialQuery,
+                initialParams,
+              );
               const rows = (result?.rows?._array ?? []) as T[];
               if (!cancelled) {
-                setState('data', reconcile(rows));
-                setState('isLoading', false);
-                setState('isFetching', false);
+                setState("data", reconcile(rows));
+                setState("isLoading", false);
               }
-            }
-          }
+            },
+          },
         });
       } catch (error) {
         if (!cancelled) {
-          setState('error', error as Error);
-          setState('isLoading', false);
-          setState('isFetching', false);
+          setState("error", error as Error);
+          setState("isLoading", false);
         }
       }
     })();

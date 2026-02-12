@@ -10,7 +10,7 @@ import { AgentViewer } from "~/slices/agent-viewer";
 import { ChannelInvite } from "~/slices/channel-invite";
 import { ChannelHeader } from "~/slices/channel-header";
 import { CreateAgent } from "~/slices/create-agent";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { useQuery } from "~/lib/powersync-solid";
 
 export default function ChannelPage() {
   const params = useParams();
@@ -19,13 +19,13 @@ export default function ChannelPage() {
   const documentId = () => searchParams.doc as string | undefined;
   const agentId = () => searchParams.agent as string | undefined;
 
-  const channel = useWatchedQuery<{ id: string }>(
+  const channel = useQuery<{ id: string }>(
     () => `SELECT id FROM channels WHERE id = ?`,
-    () => [params.id]
+    () => [params.id],
   );
 
   createEffect(() => {
-    if (!channel.loading && channel.data.length === 0) {
+    if (!channel().isLoading && channel().data.length === 0) {
       navigate("/", { replace: true });
     }
   });
@@ -47,52 +47,59 @@ export default function ChannelPage() {
   };
 
   return (
-    <div class="flex-1 flex h-full">
-      <div class="flex-1 flex flex-col">
-        {/* Header */}
-        <ChannelHeader channelId={params.id} />
+    <Show when={params.id}>
+      {(channelId) => (
+        <div class="flex-1 flex h-full">
+          <div class="flex-1 flex flex-col">
+            {/* Header */}
+            <ChannelHeader channelId={channelId()} />
 
-        <Show
-          when={documentId()}
-          fallback={
             <Show
-              when={agentId()}
+              when={documentId()}
               fallback={
-                <>
-                  <ChatMessages channelId={params.id} />
-                  <ChatInput channelId={params.id} />
-                </>
+                <Show
+                  when={agentId()}
+                  fallback={
+                    <>
+                      <ChatMessages channelId={channelId()} />
+                      <ChatInput channelId={channelId()} />
+                    </>
+                  }
+                >
+                  <AgentViewer
+                    agentId={agentId()!}
+                    onClose={handleCloseAgent}
+                  />
+                </Show>
               }
             >
-              <AgentViewer agentId={agentId()!} onClose={handleCloseAgent} />
+              <DocumentViewer
+                documentId={documentId()!}
+                onClose={handleCloseDocument}
+              />
             </Show>
-          }
-        >
-          <DocumentViewer
-            documentId={documentId()!}
-            onClose={handleCloseDocument}
-          />
-        </Show>
-      </div>
+          </div>
 
-      {/* Right sidebar */}
-      <div class="w-64 border-l border-gray-200 bg-white flex flex-col">
-        <div class="flex-1 overflow-y-auto p-4">
-          <ChannelMemberList channelId={params.id} />
-          <ChannelAgentsList
-            channelId={params.id}
-            onAgentClick={handleAgentClick}
-          />
-          <ChannelDocumentsList
-            channelId={params.id}
-            onDocumentClick={handleDocumentClick}
-          />
+          {/* Right sidebar */}
+          <div class="w-64 border-l border-gray-200 bg-white flex flex-col">
+            <div class="flex-1 overflow-y-auto p-4">
+              <ChannelMemberList channelId={channelId()} />
+              <ChannelAgentsList
+                channelId={channelId()}
+                onAgentClick={handleAgentClick}
+              />
+              <ChannelDocumentsList
+                channelId={channelId()}
+                onDocumentClick={handleDocumentClick}
+              />
+            </div>
+            <CreateAgent channelId={channelId()} />
+            <div class="p-4 border-t border-gray-200">
+              <ChannelInvite channelId={channelId()} />
+            </div>
+          </div>
         </div>
-        <CreateAgent channelId={params.id} />
-        <div class="p-4 border-t border-gray-200">
-          <ChannelInvite channelId={params.id} />
-        </div>
-      </div>
-    </div>
+      )}
+    </Show>
   );
 }

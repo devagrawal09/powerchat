@@ -32,7 +32,6 @@ describe("ChannelMemberList", () => {
     render(() => <ChannelMemberList channelId="test-channel" />);
     expect(screen.getByText("Members")).toBeInTheDocument();
     expect(screen.getByText("Users")).toBeInTheDocument();
-    expect(screen.getByText("Agents")).toBeInTheDocument();
   });
 
   it("displays user members", () => {
@@ -40,8 +39,9 @@ describe("ChannelMemberList", () => {
     expect(screen.getByText("alice")).toBeInTheDocument();
   });
 
-  it("displays agent members", () => {
+  it("does not render agent section", () => {
     render(() => <ChannelMemberList channelId="test-channel" />);
-    expect(screen.getByText("Assistant")).toBeInTheDocument();
+    expect(screen.queryByText("Agents")).not.toBeInTheDocument();
+    expect(screen.queryByText("Assistant")).not.toBeInTheDocument();
   });
 });

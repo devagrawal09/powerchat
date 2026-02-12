@@ -9,46 +9,25 @@ type LogContext = {
   agentId: string;
   agentName: string;
   channelId: string;
-  depth: number;
   instructions: string;
   input: string;
 };
 
-const maxDepth = 5;
 const defaultModel = "openrouter/anthropic/claude-haiku-4.5";
 
 const sanitizeName = (name: string) =>
   name.replace(/[^a-z0-9]/gi, "-").toLowerCase();
 
-const buildAgentContext = (
-  agents: { name: string; description: string }[],
+const buildDocumentContext = (
   documents: { title: string; description: string }[],
 ): string => {
-  let context = "";
-  if (agents.length > 0) {
-    context += "\n\nOther agents available in this channel:\n";
-    for (const agent of agents) {
-      context += `- @${agent.name}: ${agent.description}\n`;
-    }
-    context +=
-      "\n\nGUIDELINES:\n" +
-      "- Delegate to other agents using @agentname when their expertise matches the task\n" +
-      "- Use @agentname ONLY for immediate delegation; use plain names for future mentions\n" +
-      "- Delegate sequentially (one @mention at a time) when tasks depend on each other\n" +
-      "- Keep responses concise (2-4 sentences); use documents for detailed content\n" +
-      "- Create documents for long-form content and reference them with #title\n" +
-      "- When delegating, create documents to transfer knowledge and context";
+  if (documents.length === 0) return "";
+  let context = "\n\nDocuments available in this channel:\n";
+  for (const doc of documents) {
+    context += `- #${doc.title}: ${doc.description}\n`;
   }
-
-  if (documents.length > 0) {
-    context += "\n\nDocuments available in this channel:\n";
-    for (const doc of documents) {
-      context += `- #${doc.title}: ${doc.description}\n`;
-    }
-    context +=
-      "\nYou can reference these documents using #title format in your responses.";
-  }
-
+  context +=
+    "\nYou can reference these documents using #title format in your responses.";
   return context;
 };
 
@@ -76,7 +55,6 @@ const formatLogEntry = (
   log += `Agent ID: ${ctx.agentId}\n`;
   log += `Agent Name: ${ctx.agentName}\n`;
   log += `Channel ID: ${ctx.channelId}\n`;
-  log += `Depth: ${ctx.depth}\n`;
   if (completedAt) log += `Completed At: ${completedAt}\n`;
   if (error) log += `Error: ${error}\n`;
   log += "\n--- INPUT ---\n";
@@ -91,7 +69,6 @@ const formatLogEntry = (
 const formatErrorLog = (
   agentId: string,
   channelId: string,
-  depth: number,
   error: Error,
   agentName: string,
 ): string => {
@@ -102,7 +79,6 @@ const formatErrorLog = (
   log += `Agent ID: ${agentId}\n`;
   log += `Agent Name: ${agentName}\n`;
   log += `Channel ID: ${channelId}\n`;
-  log += `Depth: ${depth}\n`;
   log += `Error: ${error.message}\n`;
   if (error.stack) log += `\nStack Trace:\n${error.stack}\n`;
   log += "\n========================================\n";
@@ -144,21 +120,6 @@ const applyStreamEvent = (acc: string, ev: any) => {
   }
 };
 
-const resolveMentionedAgentIds = (
-  acc: string,
-  agentRows: { id: string; name: string }[],
-): string[] => {
-  const mentioned = new Set(
-    Array.from(acc.matchAll(/@([a-z0-9_]+)/gi)).map((m) => m[1].toLowerCase()),
-  );
-  if (!mentioned.size) return [];
-  const ids: string[] = [];
-  for (const row of agentRows) {
-    if (mentioned.has(row.name.toLowerCase())) ids.push(row.id);
-  }
-  return ids;
-};
-
 const buildMockResponse = (
   agentName: string,
   userMessage: string,
@@ -175,7 +136,6 @@ export const processAgentResponse = async (
   agentMessageId: string,
   userMessage: string,
   triggeringUsername: string,
-  depth: number = 0,
 ) => {
   const updateMessage = (content: string) =>
     query(`UPDATE messages SET content = $1 WHERE id = $2`, [
@@ -184,11 +144,7 @@ export const processAgentResponse = async (
     ]);
 
   try {
-    console.log("[agent] Processing agent response", { agentId, depth });
-    if (depth >= maxDepth) {
-      await updateMessage("Maximum collaboration depth reached (5).");
-      return { success: true, agentMessageId };
-    }
+    console.log("[agent] Processing agent response", { agentId });
 
     const agentInfo = await query(
       `SELECT name, system_instructions, description FROM agents WHERE id = $1`,
@@ -197,15 +153,6 @@ export const processAgentResponse = async (
     const agentName = agentInfo.rows[0]?.name || "Agent";
     const systemInstructions = agentInfo.rows[0]?.system_instructions || "";
     const agentDescription = agentInfo.rows[0]?.description || "";
-
-    const channelAgents = await query(
-      `SELECT a.id, a.name, a.description
-       FROM agents a
-       JOIN channel_members cm ON cm.member_id = a.id::text AND cm.member_type = 'agent'
-       WHERE cm.channel_id = $1 AND a.id::text != $2
-       ORDER BY a.name`,
-      [channelId, agentId],
-    );
 
     const channelDocuments = await query(
       `SELECT id, title, description
@@ -231,10 +178,7 @@ export const processAgentResponse = async (
       [channelId],
     );
 
-    const agentContext = buildAgentContext(
-      channelAgents.rows || [],
-      channelDocuments.rows || [],
-    );
+    const documentContext = buildDocumentContext(channelDocuments.rows || []);
     const history = buildHistory(messages.rows || []);
     const input = `Channel: ${channelId}\n${history}\nUser: ${userMessage}`;
 
@@ -246,8 +190,8 @@ export const processAgentResponse = async (
     if (triggeringUsername) {
       instructions += ` Always mention the user who triggered you by using @${triggeringUsername} in your response.`;
     }
-    instructions += agentContext;
-    if (channelDocuments.rows.length || channelAgents.rows.length) {
+    instructions += documentContext;
+    if (channelDocuments.rows.length) {
       instructions += `\n\nChannel ID: ${channelId} (use this when calling document tools)`;
     }
 
@@ -263,7 +207,6 @@ export const processAgentResponse = async (
       agentId,
       agentName,
       channelId,
-      depth,
       instructions,
       input,
     };
@@ -320,38 +263,6 @@ export const processAgentResponse = async (
       );
     }
 
-    const mentionedAgentIds = resolveMentionedAgentIds(
-      acc,
-      channelAgents.rows || [],
-    );
-    if (mentionedAgentIds.length > 0) {
-      console.log("[agent] Triggering mentioned agents", mentionedAgentIds);
-      await Promise.all(
-        mentionedAgentIds.map(async (mentionedAgentId) => {
-          const newAgentMessageId = crypto.randomUUID();
-          const agentMessageCreatedAt = new Date().toISOString();
-          await query(
-            `INSERT INTO messages (id, channel_id, author_type, author_id, content, created_at) VALUES ($1, $2, 'agent', $3, $4, $5)`,
-            [
-              newAgentMessageId,
-              channelId,
-              mentionedAgentId,
-              "Thinking...",
-              agentMessageCreatedAt,
-            ],
-          );
-          return processAgentResponse(
-            channelId,
-            mentionedAgentId,
-            newAgentMessageId,
-            acc,
-            agentName,
-            depth + 1,
-          );
-        }),
-      );
-    }
-
     return { success: true, agentMessageId };
   } catch (error: any) {
     console.error("[agent] Failed to process agent response:", error);
@@ -375,7 +286,7 @@ export const processAgentResponse = async (
       );
       await writeFile(
         logFile,
-        formatErrorLog(agentId, channelId, depth, error, errorAgentName),
+        formatErrorLog(agentId, channelId, error, errorAgentName),
       );
     } catch (logError) {
       console.error("[agent] Failed to write error log file:", logError);
