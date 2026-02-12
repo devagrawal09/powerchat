@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@solidjs/testing-library";
 import { MentionAutocomplete } from "./index";
 
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn(() => ({
+vi.mock("~/lib/powersync-solid/hooks/useQuery", () => ({
+  useQuery: vi.fn(() => () => ({
     data: [
       { member_type: "user", member_id: "user1", name: "alice" },
       {
@@ -12,7 +12,7 @@ vi.mock("~/lib/useWatchedQuery", () => ({
         name: "Assistant",
       },
     ],
-    loading: false,
+    isLoading: false,
   })),
 }));
 

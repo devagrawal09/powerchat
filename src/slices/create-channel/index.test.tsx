@@ -3,8 +3,18 @@ import { render, screen, fireEvent } from "@solidjs/testing-library";
 import { CreateChannel } from "./index";
 
 // Mock dependencies
-vi.mock("~/lib/powersync", () => ({
-  writeTransaction: vi.fn(),
+vi.mock("@solidjs/router", () => ({
+  useNavigate: vi.fn(() => vi.fn()),
+}));
+
+const { mockWriteTransaction } = vi.hoisted(() => ({
+  mockWriteTransaction: vi.fn(),
+}));
+
+vi.mock("~/lib/powersync-solid", () => ({
+  usePowerSync: vi.fn(() => ({
+    writeTransaction: mockWriteTransaction,
+  })),
 }));
 
 vi.mock("~/lib/getUsername", () => ({
@@ -23,8 +33,7 @@ describe("CreateChannel", () => {
   });
 
   it("shows 'Creating...' while submitting", async () => {
-    const { writeTransaction } = await import("~/lib/powersync");
-    vi.mocked(writeTransaction).mockImplementation(
+    mockWriteTransaction.mockImplementation(
       () =>
         new Promise((resolve) => {
           setTimeout(resolve, 1000);
@@ -42,8 +51,7 @@ describe("CreateChannel", () => {
   });
 
   it("calls writeTransaction with correct data", async () => {
-    const { writeTransaction } = await import("~/lib/powersync");
-    vi.mocked(writeTransaction).mockResolvedValue(undefined);
+    mockWriteTransaction.mockResolvedValue(undefined);
 
     render(() => <CreateChannel />);
     const input = screen.getByPlaceholderText("New channel name");
@@ -55,12 +63,11 @@ describe("CreateChannel", () => {
     // Wait for async operations
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    expect(writeTransaction).toHaveBeenCalled();
+    expect(mockWriteTransaction).toHaveBeenCalled();
   });
 
   it("clears form after successful creation", async () => {
-    const { writeTransaction } = await import("~/lib/powersync");
-    vi.mocked(writeTransaction).mockResolvedValue(undefined);
+    mockWriteTransaction.mockResolvedValue(undefined);
 
     render(() => <CreateChannel />);
     const input = screen.getByPlaceholderText(
@@ -90,8 +97,7 @@ describe("CreateChannel", () => {
   });
 
   it("validates channel name before submission", async () => {
-    const { writeTransaction } = await import("~/lib/powersync");
-    vi.mocked(writeTransaction).mockResolvedValue(undefined);
+    mockWriteTransaction.mockResolvedValue(undefined);
 
     render(() => <CreateChannel />);
     const input = screen.getByPlaceholderText("New channel name");
@@ -104,6 +110,6 @@ describe("CreateChannel", () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     // writeTransaction should not be called for invalid input
-    expect(writeTransaction).not.toHaveBeenCalled();
+    expect(mockWriteTransaction).not.toHaveBeenCalled();
   });
 });

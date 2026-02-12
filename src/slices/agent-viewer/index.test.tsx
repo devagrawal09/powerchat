@@ -3,8 +3,8 @@ import { render, screen, fireEvent } from "@solidjs/testing-library";
 import { AgentViewer } from "./index";
 
 // Mock dependencies
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn(() => ({
+vi.mock("~/lib/powersync-solid/hooks/useQuery", () => ({
+  useQuery: vi.fn(() => () => ({
     data: [
       {
         id: "test-agent",
@@ -13,7 +13,7 @@ vi.mock("~/lib/useWatchedQuery", () => ({
         system_instructions: "# Instructions\n\nTest instructions",
       },
     ],
-    loading: false,
+    isLoading: false,
   })),
 }));
 
@@ -59,11 +59,11 @@ describe("AgentViewer", () => {
   });
 
   it("shows default name when agent not loaded", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    vi.mocked(useWatchedQuery).mockReturnValueOnce({
+    const { useQuery } = await import("~/lib/powersync-solid/hooks/useQuery");
+    vi.mocked(useQuery).mockReturnValueOnce(() => ({
       data: [],
-      loading: false,
-    });
+      isLoading: false,
+    }));
 
     const onClose = vi.fn();
     render(() => <AgentViewer agentId="test-agent" onClose={onClose} />);

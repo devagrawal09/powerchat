@@ -6,7 +6,6 @@ import {
   LogLevel,
 } from "@powersync/web";
 import { column, Schema, Table } from "@powersync/web";
-import { Transaction } from "@powersync/common";
 import {
   getPowerSyncToken,
   uploadData as uploadToServer,
@@ -124,33 +123,28 @@ const schema = new Schema({
   ),
 });
 
-let db: PowerSyncDatabase | null = null;
+export const powersync = new PowerSyncDatabase({
+  schema,
+  database: {
+    dbFilename: "powerchat.db",
+  },
+});
 
 const logger = createBaseLogger();
 logger.setLevel(LogLevel.DEBUG);
 
-export async function getPowerSync() {
-  if (!db) {
-    db = new PowerSyncDatabase({
-      schema,
-      database: {
-        dbFilename: "powerchat.db",
-      },
-    });
+const connector = new PowerChatConnector();
 
-    // Connect to PowerSync Service
-    const connector = new PowerChatConnector();
-    await db.connect(connector);
-    await db.waitForReady();
-    console.log("[getPowerSync] db connected");
+let isInitialized = false;
+
+export async function connectPowerSync() {
+  if (isInitialized) {
+    return;
   }
-  return db;
-}
 
-// Helper to execute writes
-export async function writeTransaction<T>(
-  callback: (tx: Transaction) => Promise<T>,
-): Promise<T> {
-  const powersync = await getPowerSync();
-  return powersync.writeTransaction(callback);
+  await powersync.connect(connector);
+  await powersync.waitForReady();
+  isInitialized = true;
+
+  console.log("[getPowerSync] db connected");
 }

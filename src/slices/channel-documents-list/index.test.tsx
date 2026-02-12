@@ -3,8 +3,8 @@ import { render, screen, fireEvent } from "@solidjs/testing-library";
 import { ChannelDocumentsList } from "./index";
 
 // Mock dependencies
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn(() => ({
+vi.mock("~/lib/powersync-solid/hooks/useQuery", () => ({
+  useQuery: vi.fn(() => () => ({
     data: [
       {
         id: "doc-1",
@@ -17,7 +17,7 @@ vi.mock("~/lib/useWatchedQuery", () => ({
         description: "Notes from team meeting",
       },
     ],
-    loading: false,
+    isLoading: false,
   })),
 }));
 
@@ -63,11 +63,11 @@ describe("ChannelDocumentsList", () => {
   });
 
   it("handles empty document list", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    vi.mocked(useWatchedQuery).mockReturnValueOnce({
+    const { useQuery } = await import("~/lib/powersync-solid/hooks/useQuery");
+    vi.mocked(useQuery).mockReturnValueOnce(() => ({
       data: [],
-      loading: false,
-    });
+      isLoading: false,
+    }));
 
     const onDocumentClick = vi.fn();
     render(() => (
@@ -81,11 +81,11 @@ describe("ChannelDocumentsList", () => {
   });
 
   it("hides content while loading", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    vi.mocked(useWatchedQuery).mockReturnValueOnce({
+    const { useQuery } = await import("~/lib/powersync-solid/hooks/useQuery");
+    vi.mocked(useQuery).mockReturnValueOnce(() => ({
       data: [],
-      loading: true,
-    });
+      isLoading: true,
+    }));
 
     const onDocumentClick = vi.fn();
     render(() => (

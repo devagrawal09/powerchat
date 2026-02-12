@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@solidjs/testing-library";
 import { ChannelHeader } from "./index";
 
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn(() => ({
+vi.mock("~/lib/powersync-solid/hooks/useQuery", () => ({
+  useQuery: vi.fn(() => () => ({
     data: [
       {
         id: "test-channel",
@@ -12,7 +12,7 @@ vi.mock("~/lib/useWatchedQuery", () => ({
         created_at: "2024-01-01",
       },
     ],
-    loading: false,
+    isLoading: false,
   })),
 }));
 
@@ -27,11 +27,11 @@ describe("ChannelHeader", () => {
   });
 
   it("shows loading state", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    vi.mocked(useWatchedQuery).mockReturnValueOnce({
+    const { useQuery } = await import("~/lib/powersync-solid/hooks/useQuery");
+    vi.mocked(useQuery).mockReturnValueOnce(() => ({
       data: [],
-      loading: true,
-    });
+      isLoading: true,
+    }));
 
     render(() => <ChannelHeader channelId="test-channel" />);
     expect(screen.getByText("Loading...")).toBeInTheDocument();

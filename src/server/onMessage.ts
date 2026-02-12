@@ -35,29 +35,19 @@ export async function onMessage(message: MessageRow): Promise<void> {
        ON cm.member_id = a.id::text
       AND cm.member_type = 'agent'
      WHERE cm.channel_id = $1
+       AND lower(a.name) = ANY($2)
      ORDER BY a.name`,
-    [message.channel_id],
+    [message.channel_id, mentionedNames],
   );
 
   if (!agentRows.rows?.length) return;
 
-  const agentIdByName = new Map<string, string>();
-  for (const row of agentRows.rows) {
-    if (!row?.name || !row?.id) continue;
-    agentIdByName.set(String(row.name).toLowerCase(), String(row.id));
-  }
+  const mentionedAgentIds = agentRows.rows.map((row) => String(row.id));
 
-  const mentionedAgentIds = new Set<string>();
-  for (const name of mentionedNames) {
-    const id = agentIdByName.get(name);
-    if (id) mentionedAgentIds.add(id);
-  }
   console.log("[onMessage] resolved agents", {
     id: message.id,
     agentIds: Array.from(mentionedAgentIds),
   });
-
-  if (mentionedAgentIds.size === 0) return;
 
   const triggerPromises = Array.from(mentionedAgentIds).map(async (agentId) => {
     const agentMessageId = crypto.randomUUID();

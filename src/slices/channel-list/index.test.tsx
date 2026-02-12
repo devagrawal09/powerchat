@@ -22,10 +22,10 @@ const mockChannels = [
   },
 ];
 
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn(() => ({
+vi.mock("~/lib/powersync-solid/hooks/useQuery", () => ({
+  useQuery: vi.fn(() => () => ({
     data: mockChannels,
-    loading: false,
+    isLoading: false,
   })),
 }));
 
@@ -59,12 +59,12 @@ describe("ChannelList", () => {
 
   it("shows loading state while query is loading", async () => {
     // Import and mock for this specific test
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    vi.mocked(useWatchedQuery).mockReturnValueOnce({
+    const { useQuery } = await import("~/lib/powersync-solid/hooks/useQuery");
+    vi.mocked(useQuery).mockReturnValueOnce(() => ({
       data: [],
-      loading: true,
+      isLoading: true,
       error: undefined,
-    });
+    }));
 
     render(() => <ChannelList />);
     expect(screen.getByText("Loading...")).toBeInTheDocument();

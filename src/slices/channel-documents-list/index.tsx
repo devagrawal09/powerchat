@@ -1,5 +1,5 @@
 import { For, Show } from "solid-js";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 
 type DocumentRow = {
   id: string;
@@ -14,7 +14,7 @@ type ChannelDocumentsListProps = {
 
 export function ChannelDocumentsList(props: ChannelDocumentsListProps) {
   // Documents in channel
-  const documents = useWatchedQuery<DocumentRow>(
+  const documents = useQuery<DocumentRow>(
     () =>
       `SELECT id, title, description 
        FROM documents 
@@ -28,8 +28,8 @@ export function ChannelDocumentsList(props: ChannelDocumentsListProps) {
       <div class="text-xs font-semibold text-gray-500 uppercase mt-4 mb-2">
         Documents
       </div>
-      <Show when={!documents.loading}>
-        <For each={documents.data}>
+      <Show when={!documents().isLoading}>
+        <For each={documents().data}>
           {(doc) => (
             <div
               onClick={() => props.onDocumentClick(doc.id)}

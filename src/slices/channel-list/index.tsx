@@ -1,6 +1,6 @@
 import { For, Show, createMemo } from "solid-js";
 import { A } from "@solidjs/router";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 import { DeleteChannel } from "~/slices/delete-channel";
 import { getUsername } from "~/lib/getUsername";
 
@@ -14,13 +14,13 @@ type ChannelRow = {
 export function ChannelList() {
   const username = createMemo(() => getUsername());
 
-  const channels = useWatchedQuery<ChannelRow>(
+  const channels = useQuery<ChannelRow>(
     () =>
       `SELECT c.* FROM channels c
        JOIN channel_members cm ON cm.channel_id = c.id
        WHERE cm.member_type = 'user' AND cm.member_id = ?
        ORDER BY c.created_at DESC`,
-    () => [username() || ""]
+    () => [username() || ""],
   );
 
   return (
@@ -29,10 +29,10 @@ export function ChannelList() {
         Channels
       </div>
       <Show
-        when={!channels.loading}
+        when={!channels().isLoading}
         fallback={<div class="px-2 text-sm text-gray-500">Loading...</div>}
       >
-        <For each={channels.data}>
+        <For each={channels().data}>
           {(channel) => (
             <div class="flex items-center group">
               <A

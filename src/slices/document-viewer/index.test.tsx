@@ -3,8 +3,8 @@ import { render, screen, fireEvent } from "@solidjs/testing-library";
 import { DocumentViewer } from "./index";
 
 // Mock dependencies
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn(() => ({
+vi.mock("~/lib/powersync-solid/hooks/useQuery", () => ({
+  useQuery: vi.fn(() => () => ({
     data: [
       {
         id: "test-doc",
@@ -13,7 +13,7 @@ vi.mock("~/lib/useWatchedQuery", () => ({
         content: "# Content\n\nTest content here",
       },
     ],
-    loading: false,
+    isLoading: false,
   })),
 }));
 
@@ -61,11 +61,11 @@ describe("DocumentViewer", () => {
   });
 
   it("shows default title when document not loaded", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    vi.mocked(useWatchedQuery).mockReturnValueOnce({
+    const { useQuery } = await import("~/lib/powersync-solid/hooks/useQuery");
+    vi.mocked(useQuery).mockReturnValueOnce(() => ({
       data: [],
-      loading: false,
-    });
+      isLoading: false,
+    }));
 
     const onClose = vi.fn();
     render(() => <DocumentViewer documentId="test-doc" onClose={onClose} />);

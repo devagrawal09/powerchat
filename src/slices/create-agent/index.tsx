@@ -1,6 +1,6 @@
 import { createSignal, Show } from "solid-js";
-import { writeTransaction } from "~/lib/powersync";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { usePowerSync } from "~/lib/powersync-solid";
+import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 
 type CreateAgentProps = {
   channelId: string;
@@ -13,6 +13,7 @@ type AgentRow = {
 };
 
 export function CreateAgent(props: CreateAgentProps) {
+  const powersync = usePowerSync();
   const [isOpen, setIsOpen] = createSignal(false);
   const [name, setName] = createSignal("");
   const [systemInstructions, setSystemInstructions] = createSignal("");
@@ -24,7 +25,7 @@ export function CreateAgent(props: CreateAgentProps) {
   } | null>(null);
 
   // Query existing agents to check for duplicates
-  const existingAgents = useWatchedQuery<AgentRow>(
+  const existingAgents = useQuery<AgentRow>(
     () => `SELECT id, name FROM agents`,
     () => []
   );
@@ -58,7 +59,7 @@ export function CreateAgent(props: CreateAgentProps) {
     }
 
     // Check for duplicate agent name
-    const duplicate = (existingAgents.data || []).find(
+    const duplicate = (existingAgents().data || []).find(
       (a) => a.name.toLowerCase() === trimmedName.toLowerCase()
     );
     if (duplicate) {
@@ -70,10 +71,15 @@ export function CreateAgent(props: CreateAgentProps) {
     setMessage(null);
 
     try {
+      if (!powersync) {
+        setMessage({ type: "error", text: "PowerSync not configured" });
+        return;
+      }
+
       const agentId = crypto.randomUUID();
       const now = new Date().toISOString();
 
-      await writeTransaction(async (tx) => {
+      await powersync.writeTransaction(async (tx) => {
         await tx.execute(
           `INSERT INTO agents (id, name, system_instructions, description, model_config, created_at)
            VALUES (?, ?, ?, ?, ?, ?)`,

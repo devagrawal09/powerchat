@@ -1,5 +1,5 @@
 import { For, Show } from "solid-js";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 
 type MemberRow = {
   member_type: "agent";
@@ -14,7 +14,7 @@ type ChannelAgentsListProps = {
 
 export function ChannelAgentsList(props: ChannelAgentsListProps) {
   // Agents in channel
-  const agents = useWatchedQuery<MemberRow>(
+  const agents = useQuery<MemberRow>(
     () =>
       `SELECT 'agent' as member_type, cm.member_id as member_id,
               COALESCE(a.name, 'Agent') as name
@@ -30,8 +30,8 @@ export function ChannelAgentsList(props: ChannelAgentsListProps) {
       <div class="text-xs font-semibold text-gray-500 uppercase mt-4 mb-2">
         Agents
       </div>
-      <Show when={!agents.loading}>
-        <For each={agents.data}>
+      <Show when={!agents().isLoading}>
+        <For each={agents().data}>
           {(member) => (
             <div
               onClick={() => props.onAgentClick(member.member_id)}

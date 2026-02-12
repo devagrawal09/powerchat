@@ -1,5 +1,5 @@
-import { Show } from "solid-js";
-import { useParams, useSearchParams } from "@solidjs/router";
+import { Show, createEffect } from "solid-js";
+import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import { ChatMessages } from "~/slices/chat-messages";
 import { ChatInput } from "~/slices/chat-input";
 import { ChannelMemberList } from "~/slices/channel-member-list";
@@ -10,12 +10,25 @@ import { AgentViewer } from "~/slices/agent-viewer";
 import { ChannelInvite } from "~/slices/channel-invite";
 import { ChannelHeader } from "~/slices/channel-header";
 import { CreateAgent } from "~/slices/create-agent";
+import { useWatchedQuery } from "~/lib/useWatchedQuery";
 
 export default function ChannelPage() {
   const params = useParams();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const documentId = () => searchParams.doc as string | undefined;
   const agentId = () => searchParams.agent as string | undefined;
+
+  const channel = useWatchedQuery<{ id: string }>(
+    () => `SELECT id FROM channels WHERE id = ?`,
+    () => [params.id]
+  );
+
+  createEffect(() => {
+    if (!channel.loading && channel.data.length === 0) {
+      navigate("/", { replace: true });
+    }
+  });
 
   const handleDocumentClick = (docId: string) => {
     setSearchParams({ doc: docId, agent: undefined });

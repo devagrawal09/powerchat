@@ -2,12 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@solidjs/testing-library";
 import { ChannelMemberList } from "./index";
 
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn((query) => {
+vi.mock("~/lib/powersync-solid/hooks/useQuery", () => ({
+  useQuery: vi.fn((query) => () => {
     if (query().includes("member_type = 'user'")) {
       return {
         data: [{ member_type: "user", member_id: "user1", name: "alice" }],
-        loading: false,
+        isLoading: false,
       };
     }
     return {
@@ -18,7 +18,7 @@ vi.mock("~/lib/useWatchedQuery", () => ({
           name: "Assistant",
         },
       ],
-      loading: false,
+      isLoading: false,
     };
   }),
 }));

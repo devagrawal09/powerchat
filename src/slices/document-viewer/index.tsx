@@ -1,6 +1,6 @@
-import { createEffect, Show } from "solid-js";
-import { useNavigate } from "solid-router";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { Show } from "solid-js";
+// import { useNavigate } from "solid-router";
+import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 import { RenderMarkdown } from "~/components/Markdown";
 
 type DocumentRow = {
@@ -16,7 +16,7 @@ type DocumentViewerProps = {
 };
 
 export function DocumentViewer(props: DocumentViewerProps) {
-  const document = useWatchedQuery<DocumentRow>(
+  const document = useQuery<DocumentRow>(
     () =>
       `SELECT id, title, description, content
        FROM documents
@@ -26,8 +26,8 @@ export function DocumentViewer(props: DocumentViewerProps) {
 
   // const navigate = useNavigate();
   // createEffect(() => {
-  //   if(document.data.length === 0) {
-  //     console.log(document.data[0]);
+  //   if(document().data.length === 0) {
+  //     console.log(document().data[0]);
   //     navigate
   //   }
   // })
@@ -37,7 +37,7 @@ export function DocumentViewer(props: DocumentViewerProps) {
       {/* Header with title and close button */}
       <div class="border-b border-gray-200 bg-white p-4 flex items-center justify-between">
         <h2 class="text-lg font-semibold text-gray-900">
-          {document.data[0]?.title || "Document"}
+          {document().data[0]?.title || "Document"}
         </h2>
         <button
           onClick={props.onClose}
@@ -49,18 +49,18 @@ export function DocumentViewer(props: DocumentViewerProps) {
 
       {/* Document content */}
       <div class="flex-1 overflow-y-auto p-4 bg-gray-50">
-        <Show when={document.data.length > 0}>
+        <Show when={document().data.length > 0}>
           <div class="max-w-4xl mx-auto">
             {/* Description */}
             <div class="mb-6">
               <p class="text-sm text-gray-600">
-                {document.data[0].description}
+                {document().data[0].description}
               </p>
             </div>
 
             {/* Content */}
             <div class="prose prose-sm max-w-none text-gray-900">
-              <RenderMarkdown>{document.data[0].content}</RenderMarkdown>
+              <RenderMarkdown>{document().data[0].content}</RenderMarkdown>
             </div>
           </div>
         </Show>

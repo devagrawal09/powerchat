@@ -1,5 +1,5 @@
 import { createMemo, For, Show } from "solid-js";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 
 type MemberRow = {
   member_type: "user" | "agent";
@@ -24,7 +24,7 @@ type MentionAutocompleteProps = {
 };
 
 export function MentionAutocomplete(props: MentionAutocompleteProps) {
-  const members = useWatchedQuery<MemberRow>(
+  const members = useQuery<MemberRow>(
     () =>
       `SELECT cm.member_type, cm.member_id,
               CASE 
@@ -40,7 +40,7 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
     () => [props.channelId]
   );
 
-  const documents = useWatchedQuery<DocumentRow>(
+  const documents = useQuery<DocumentRow>(
     () =>
       `SELECT id, title, description 
        FROM documents 
@@ -71,7 +71,7 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
 
     if (props.mentionType === "#") {
       // Document mentions
-      const list = (documents.data || []).map((d) => ({
+      const list = (documents().data || []).map((d) => ({
         type: "document" as const,
         id: d.id,
         name: d.title,
@@ -79,7 +79,7 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
       return list.filter((o) => fuzzyMatch(o.name, q));
     } else {
       // Member mentions
-      const list = (members.data || [])
+      const list = (members().data || [])
         .filter((m) => m.name)
         .map((m) => ({
           type: m.member_type,

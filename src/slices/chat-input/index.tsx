@@ -1,7 +1,7 @@
 import { createSignal, createMemo } from "solid-js";
-import { writeTransaction } from "~/lib/powersync";
 import { getUsername } from "~/lib/getUsername";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { usePowerSync } from "~/lib/powersync-solid";
+import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 import { MentionAutocomplete } from "~/slices/mention-autocomplete";
 
 type MemberRow = {
@@ -24,6 +24,7 @@ type ChatInputProps = {
 export function ChatInput(props: ChatInputProps) {
   const [content, setContent] = createSignal("");
   const [activeMentionIndex, setActiveMentionIndex] = createSignal(0);
+  const powersync = usePowerSync();
 
   // Detect mention query from content (@ for members)
   const mentionState = createMemo(() => {
@@ -67,7 +68,7 @@ export function ChatInput(props: ChatInputProps) {
   // Query members for agent mention detection and resolution
   // Note: This query is needed for the mutation logic (resolving agent IDs from mentions)
   // The autocomplete UI is handled by the separate MentionAutocomplete slice
-  const members = useWatchedQuery<MemberRow>(
+  const members = useQuery<MemberRow>(
     () =>
       `SELECT cm.member_type, cm.member_id,
               CASE
@@ -84,7 +85,7 @@ export function ChatInput(props: ChatInputProps) {
   );
 
   // Query documents for document mention autocomplete
-  const documents = useWatchedQuery<DocumentRow>(
+  const documents = useQuery<DocumentRow>(
     () =>
       `SELECT id, title, description
        FROM documents
@@ -114,7 +115,7 @@ export function ChatInput(props: ChatInputProps) {
     const state = mentionState();
     if (!state.isOpen) return [];
     const q = state.query.toLowerCase();
-    const list = (members.data || [])
+    const list = (members().data || [])
       .filter((m) => m.name)
       .map((m) => ({
         type: m.member_type,
@@ -129,7 +130,7 @@ export function ChatInput(props: ChatInputProps) {
     const state = documentMentionState();
     if (!state.isOpen) return [];
     const q = state.query.toLowerCase();
-    const list = (documents.data || []).map((d) => ({
+    const list = (documents().data || []).map((d) => ({
       type: "document" as const,
       id: d.id,
       name: d.title,
@@ -165,6 +166,11 @@ export function ChatInput(props: ChatInputProps) {
         return;
       }
 
+      if (!powersync) {
+        console.error("[send] PowerSync not configured");
+        return;
+      }
+
       console.log("before writeTransaction", {
         username,
         messageId,
@@ -172,7 +178,7 @@ export function ChatInput(props: ChatInputProps) {
       });
 
       // Insert user message
-      const t = writeTransaction(async (tx) => {
+      const t = powersync.writeTransaction(async (tx) => {
         console.log("before execute", {
           tx,
           messageId,
@@ -197,7 +203,6 @@ export function ChatInput(props: ChatInputProps) {
       await t;
 
       console.log("after writeTransaction async");
-
     } catch (error: unknown) {
       console.error("[send] error", error);
       // Error will be handled by the server function

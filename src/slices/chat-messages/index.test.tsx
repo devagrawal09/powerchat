@@ -33,10 +33,10 @@ const mockMessages = [
   },
 ];
 
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn(() => ({
+vi.mock("~/lib/powersync-solid/hooks/useQuery", () => ({
+  useQuery: vi.fn(() => () => ({
     data: mockMessages,
-    loading: false,
+    isLoading: false,
   })),
 }));
 
@@ -86,12 +86,12 @@ describe("ChatMessages", () => {
   });
 
   it("shows loading state", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    vi.mocked(useWatchedQuery).mockReturnValueOnce({
+    const { useQuery } = await import("~/lib/powersync-solid/hooks/useQuery");
+    vi.mocked(useQuery).mockReturnValueOnce(() => ({
       data: [],
-      loading: true,
+      isLoading: true,
       error: undefined,
-    });
+    }));
 
     const { container } = render(() => <ChatMessages channelId="channel-1" />);
 
@@ -102,12 +102,12 @@ describe("ChatMessages", () => {
   });
 
   it("renders empty state when no messages", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    vi.mocked(useWatchedQuery).mockReturnValueOnce({
+    const { useQuery } = await import("~/lib/powersync-solid/hooks/useQuery");
+    vi.mocked(useQuery).mockReturnValueOnce(() => ({
       data: [],
-      loading: false,
+      isLoading: false,
       error: undefined,
-    });
+    }));
 
     const { container } = render(() => <ChatMessages channelId="channel-1" />);
 
@@ -116,8 +116,8 @@ describe("ChatMessages", () => {
   });
 
   it("handles missing author_name gracefully", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    vi.mocked(useWatchedQuery).mockReturnValueOnce({
+    const { useQuery } = await import("~/lib/powersync-solid/hooks/useQuery");
+    vi.mocked(useQuery).mockReturnValueOnce(() => ({
       data: [
         {
           id: "msg-4",
@@ -129,9 +129,9 @@ describe("ChatMessages", () => {
           author_name: null,
         },
       ],
-      loading: false,
+      isLoading: false,
       error: undefined,
-    });
+    }));
 
     render(() => <ChatMessages channelId="channel-1" />);
 
@@ -140,12 +140,12 @@ describe("ChatMessages", () => {
   });
 
   it("queries messages with correct channel ID", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
+    const { useQuery } = await import("~/lib/powersync-solid/hooks/useQuery");
 
     render(() => <ChatMessages channelId="test-channel-123" />);
 
-    expect(useWatchedQuery).toHaveBeenCalled();
-    const call = vi.mocked(useWatchedQuery).mock.calls[0];
+    expect(useQuery).toHaveBeenCalled();
+    const call = vi.mocked(useQuery).mock.calls[0];
 
     // Check that the query parameters function returns the correct channel ID
     const paramsFunction = call[1];
@@ -153,12 +153,12 @@ describe("ChatMessages", () => {
   });
 
   it("orders messages by created_at and id", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
+    const { useQuery } = await import("~/lib/powersync-solid/hooks/useQuery");
 
     render(() => <ChatMessages channelId="channel-1" />);
 
     // Verify the SQL query includes ORDER BY clause
-    const call = vi.mocked(useWatchedQuery).mock.calls[0];
+    const call = vi.mocked(useQuery).mock.calls[0];
     const sqlFunction = call[0];
     const sql = sqlFunction();
 
@@ -166,12 +166,12 @@ describe("ChatMessages", () => {
   });
 
   it("includes author name resolution in query", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
+    const { useQuery } = await import("~/lib/powersync-solid/hooks/useQuery");
 
     render(() => <ChatMessages channelId="channel-1" />);
 
     // Verify the SQL query includes CASE statement for author name resolution
-    const call = vi.mocked(useWatchedQuery).mock.calls[0];
+    const call = vi.mocked(useQuery).mock.calls[0];
     const sqlFunction = call[0];
     const sql = sqlFunction();
 

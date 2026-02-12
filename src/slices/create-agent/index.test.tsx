@@ -3,14 +3,20 @@ import { render, screen, fireEvent, waitFor } from "@solidjs/testing-library";
 import { CreateAgent } from "./index";
 
 // Mock dependencies
-vi.mock("~/lib/powersync", () => ({
-  writeTransaction: vi.fn(),
+const { mockWriteTransaction } = vi.hoisted(() => ({
+  mockWriteTransaction: vi.fn(),
 }));
 
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn(() => ({
+vi.mock("~/lib/powersync-solid", () => ({
+  usePowerSync: vi.fn(() => ({
+    writeTransaction: mockWriteTransaction,
+  })),
+}));
+
+vi.mock("~/lib/powersync-solid/hooks/useQuery", () => ({
+  useQuery: vi.fn(() => () => ({
     data: [],
-    loading: false,
+    isLoading: false,
   })),
 }));
 
@@ -111,8 +117,7 @@ describe("CreateAgent", () => {
   });
 
   it("calls writeTransaction on successful submission", async () => {
-    const { writeTransaction } = await import("~/lib/powersync");
-    vi.mocked(writeTransaction).mockResolvedValue(undefined);
+    mockWriteTransaction.mockResolvedValue(undefined);
 
     render(() => <CreateAgent channelId="test-channel" />);
     const button = screen.getByText("Create Agent");
@@ -132,13 +137,12 @@ describe("CreateAgent", () => {
     fireEvent.submit(form);
 
     await waitFor(() => {
-      expect(writeTransaction).toHaveBeenCalled();
+      expect(mockWriteTransaction).toHaveBeenCalled();
     });
   });
 
   it("shows success message after creation", async () => {
-    const { writeTransaction } = await import("~/lib/powersync");
-    vi.mocked(writeTransaction).mockResolvedValue(undefined);
+    mockWriteTransaction.mockResolvedValue(undefined);
 
     render(() => <CreateAgent channelId="test-channel" />);
     const button = screen.getByText("Create Agent");
@@ -165,9 +169,8 @@ describe("CreateAgent", () => {
   });
 
   it("calls onSuccess callback after creation", async () => {
-    const { writeTransaction } = await import("~/lib/powersync");
     const onSuccess = vi.fn();
-    vi.mocked(writeTransaction).mockResolvedValue(undefined);
+    mockWriteTransaction.mockResolvedValue(undefined);
 
     render(() => (
       <CreateAgent channelId="test-channel" onSuccess={onSuccess} />

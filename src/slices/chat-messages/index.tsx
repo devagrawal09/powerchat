@@ -1,8 +1,8 @@
 import { For, Show, createMemo, createEffect } from "solid-js";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { usePowerSync } from "~/lib/powersync-solid";
+import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 import { RenderMarkdown } from "~/components/Markdown";
 import { getUsername } from "~/lib/getUsername";
-import { writeTransaction } from "~/lib/powersync";
 
 type MessageRow = {
   id: string;
@@ -11,12 +11,7 @@ type MessageRow = {
   author_id: string;
   content: string;
   created_at: string;
-};
-
-type MemberRow = {
-  member_type: "user" | "agent";
-  member_id: string;
-  name: string | null;
+  author_name: string;
 };
 
 type ChatMessagesProps = {
@@ -25,64 +20,43 @@ type ChatMessagesProps = {
 
 export function ChatMessages(props: ChatMessagesProps) {
   let scrollContainer: HTMLDivElement | undefined;
+  const powersync = usePowerSync();
 
-  // Query messages without JOINs - enables trigger-based diffs later
-  const messages = useWatchedQuery<MessageRow>(
+  // Query messages with author names via JOIN
+  const messages = useQuery<MessageRow>(
     () =>
-      `SELECT *
-       FROM messages
-       WHERE channel_id = ?
-       ORDER BY created_at ASC, id ASC`,
-    () => [props.channelId],
-  );
-
-  // Query channel members separately for author name lookup
-  const members = useWatchedQuery<MemberRow>(
-    () =>
-      `SELECT cm.member_type, cm.member_id,
+      `SELECT m.*,
               CASE
-                WHEN cm.member_type = 'user' THEN COALESCE(u.id, cm.member_id)
-                WHEN cm.member_type = 'agent' THEN COALESCE(a.name, 'Agent')
-                ELSE cm.member_id
-              END AS name
-       FROM channel_members cm
-       LEFT JOIN users u ON cm.member_type = 'user' AND u.id = cm.member_id
-       LEFT JOIN agents a ON cm.member_type = 'agent' AND a.id = cm.member_id
-       WHERE cm.channel_id = ?`,
+                WHEN m.author_type = 'system' THEN 'System'
+                WHEN m.author_type = 'user' THEN u.id
+                WHEN m.author_type = 'agent' THEN a.name
+                ELSE m.author_id
+              END AS author_name
+       FROM messages m
+       LEFT JOIN users u ON m.author_type = 'user' AND u.id = m.author_id
+       LEFT JOIN agents a ON m.author_type = 'agent' AND a.id = m.author_id
+       WHERE m.channel_id = ?
+       ORDER BY m.created_at ASC, m.id ASC`,
     () => [props.channelId],
   );
-
-  // Create lookup map: (author_type, author_id) -> name
-  const authorNameMap = createMemo(() => {
-    const map = new Map<string, string>();
-    (members.data || []).forEach((member) => {
-      const key = `${member.member_type}:${member.member_id}`;
-      map.set(key, member.name || member.member_id);
-    });
-    return map;
-  });
 
   // Helper to get author name
   const getAuthorName = (message: MessageRow): string => {
-    if (message.author_type === "system") {
-      return "System";
-    }
-    const key = `${message.author_type}:${message.author_id}`;
-    return authorNameMap().get(key) || message.author_id;
+    return message.author_name || message.author_id;
   };
 
   createEffect(() => {
-    const m = JSON.stringify(messages.data, null, 2);
+    const m = JSON.stringify(messages().data, null, 2);
     console.log("messages", m);
   });
 
   const currentUsername = createMemo(() => getUsername());
 
   // Track message count to detect new messages
-  const messageCount = createMemo(() => messages.data.length);
+  const messageCount = createMemo(() => messages().data.length);
   const lastMessageId = createMemo(() =>
-    messages.data.length > 0
-      ? messages.data[messages.data.length - 1]?.id
+    messages().data.length > 0
+      ? messages().data[messages().data.length - 1]?.id
       : null,
   );
 
@@ -91,7 +65,7 @@ export function ChatMessages(props: ChatMessagesProps) {
     props.channelId; // Track channelId changes
     messageCount(); // Track message count changes
     lastMessageId(); // Track last message ID changes
-    if (!messages.loading && scrollContainer) {
+    if (!messages().isLoading && scrollContainer) {
       // Use setTimeout to ensure DOM has updated
       setTimeout(() => {
         scrollContainer!.scrollTop = scrollContainer!.scrollHeight;
@@ -122,7 +96,12 @@ export function ChatMessages(props: ChatMessagesProps) {
 
   // Delete message handler
   const handleDeleteMessage = async (messageId: string) => {
-    await writeTransaction(async (tx) => {
+    if (!powersync) {
+      console.error("[delete message] PowerSync not configured");
+      return;
+    }
+
+    await powersync.writeTransaction(async (tx) => {
       await tx.execute("DELETE FROM messages WHERE id = ?", [messageId]);
     });
   };
@@ -133,14 +112,14 @@ export function ChatMessages(props: ChatMessagesProps) {
       class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50"
     >
       <Show
-        when={!messages.loading}
+        when={!messages().isLoading}
         fallback={<div class="text-sm text-gray-500">Loading messages...</div>}
       >
         <Show
-          when={messages.data.length > 0}
+          when={messages().data.length > 0}
           fallback={<div class="text-sm text-gray-500">No messages yet</div>}
         >
-          <For each={messages.data}>
+          <For each={messages().data}>
             {(message) => {
               const authorName = createMemo(() => getAuthorName(message));
               const mentioned = createMemo(() => isMentioned(message.content));

@@ -3,8 +3,14 @@ import { render, screen, fireEvent } from "@solidjs/testing-library";
 import { ChatInput } from "./index";
 
 // Mock dependencies
-vi.mock("~/lib/powersync", () => ({
-  writeTransaction: vi.fn(),
+const { mockWriteTransaction } = vi.hoisted(() => ({
+  mockWriteTransaction: vi.fn(),
+}));
+
+vi.mock("~/lib/powersync-solid", () => ({
+  usePowerSync: vi.fn(() => ({
+    writeTransaction: mockWriteTransaction,
+  })),
 }));
 
 
@@ -12,8 +18,8 @@ vi.mock("~/lib/getUsername", () => ({
   getUsername: vi.fn(() => "testuser"),
 }));
 
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn(() => ({
+vi.mock("~/lib/powersync-solid/hooks/useQuery", () => ({
+  useQuery: vi.fn(() => () => ({
     data: [
       {
         member_type: "agent",
@@ -21,7 +27,7 @@ vi.mock("~/lib/useWatchedQuery", () => ({
         name: "Assistant",
       },
     ],
-    loading: false,
+    isLoading: false,
   })),
 }));
 
@@ -58,8 +64,7 @@ describe("ChatInput", () => {
   });
 
   it("clears input after successful send", async () => {
-    const { writeTransaction } = await import("~/lib/powersync");
-    vi.mocked(writeTransaction).mockResolvedValue(undefined);
+    mockWriteTransaction.mockResolvedValue(undefined);
 
     render(() => <ChatInput channelId="test-channel" />);
     const input = screen.getByPlaceholderText(/Message #/) as HTMLInputElement;

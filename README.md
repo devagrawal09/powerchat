@@ -78,6 +78,16 @@ VITE_POWERSYNC_SERVICE_URL=https://your-instance.powersync.com
 bun dev
 ```
 
+### Mock LLM Mode
+
+Run the app without external model calls:
+
+```bash
+bun run dev:mock
+```
+
+This sets `MOCK_LLM=1` so agents respond with deterministic mock replies.
+
 Visit `http://localhost:3000`
 
 ## Usage

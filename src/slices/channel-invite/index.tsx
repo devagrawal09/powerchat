@@ -1,6 +1,5 @@
 import { createSignal, Show, For, createMemo } from "solid-js";
-import { writeTransaction } from "~/lib/powersync";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { useQuery, usePowerSync } from "~/lib/powersync-solid";
 import { getUsername } from "~/lib/getUsername";
 
 type ChannelInviteProps = {
@@ -24,7 +23,7 @@ type UserRow = {
 export function ChannelInvite(props: ChannelInviteProps) {
   const [username, setUsername] = createSignal("");
   const [selectedAgentId, setSelectedAgentId] = createSignal<string | null>(
-    null
+    null,
   );
   const [inviteType, setInviteType] = createSignal<"user" | "agent">("user");
   const [submitting, setSubmitting] = createSignal(false);
@@ -34,37 +33,39 @@ export function ChannelInvite(props: ChannelInviteProps) {
   } | null>(null);
 
   // Get all available agents
-  const allAgents = useWatchedQuery<AgentRow>(
+  const allAgents = useQuery<AgentRow>(
     () => `SELECT id, name, description FROM agents ORDER BY name`,
-    () => []
+    () => [],
   );
 
   // Get agents already in channel
-  const channelAgents = useWatchedQuery<MemberRow>(
+  const channelAgents = useQuery<MemberRow>(
     () =>
       `SELECT member_id FROM channel_members WHERE channel_id = ? AND member_type = 'agent'`,
-    () => [props.channelId]
+    () => [props.channelId],
   );
 
   // Get all users for validation
-  const allUsers = useWatchedQuery<UserRow>(
+  const allUsers = useQuery<UserRow>(
     () => `SELECT id FROM users`,
-    () => []
+    () => [],
   );
 
   // Get current channel members to check for duplicates
-  const channelMembers = useWatchedQuery<MemberRow>(
+  const channelMembers = useQuery<MemberRow>(
     () => `SELECT member_id FROM channel_members WHERE channel_id = ?`,
-    () => [props.channelId]
+    () => [props.channelId],
   );
 
   // Filter out agents already in channel
   const availableAgents = createMemo(() => {
     const inChannel = new Set(
-      channelAgents.data?.map((a) => a.member_id) || []
+      channelAgents().data?.map((a) => a.member_id) || [],
     );
-    return (allAgents.data || []).filter((a) => !inChannel.has(a.id));
+    return (allAgents().data || []).filter((a) => !inChannel.has(a.id));
   });
+
+  const powersync = usePowerSync();
 
   const handleInviteUser = async (e: Event) => {
     e.preventDefault();
@@ -77,8 +78,8 @@ export function ChannelInvite(props: ChannelInviteProps) {
     }
 
     // Verify current user is a member of the channel
-    const currentUserIsMember = (channelMembers.data || []).find(
-      (m) => m.member_id === currentUser
+    const currentUserIsMember = (channelMembers().data || []).find(
+      (m) => m.member_id === currentUser,
     );
     if (!currentUserIsMember) {
       setMessage({
@@ -89,18 +90,23 @@ export function ChannelInvite(props: ChannelInviteProps) {
     }
 
     // Check if user exists
-    const userExists = (allUsers.data || []).find((u) => u.id === value);
+    const userExists = (allUsers().data || []).find((u) => u.id === value);
     if (!userExists) {
       setMessage({ type: "error", text: "User not found" });
       return;
     }
 
     // Check if user is already a member
-    const isMember = (channelMembers.data || []).find(
-      (m) => m.member_id === value
+    const isMember = (channelMembers().data || []).find(
+      (m) => m.member_id === value,
     );
     if (isMember) {
       setMessage({ type: "error", text: "User is already a member" });
+      return;
+    }
+
+    if (!powersync) {
+      setMessage({ type: "error", text: "PowerSync not configured" });
       return;
     }
 
@@ -111,11 +117,11 @@ export function ChannelInvite(props: ChannelInviteProps) {
       const memberId = crypto.randomUUID();
       const now = new Date().toISOString();
 
-      await writeTransaction(async (tx) => {
+      await powersync.writeTransaction(async (tx) => {
         await tx.execute(
           `INSERT INTO channel_members (id, channel_id, member_type, member_id, joined_at)
            VALUES (?, ?, 'user', ?, ?)`,
-          [memberId, props.channelId, value, now]
+          [memberId, props.channelId, value, now],
         );
       });
 
@@ -142,8 +148,8 @@ export function ChannelInvite(props: ChannelInviteProps) {
     }
 
     // Verify current user is a member of the channel
-    const currentUserIsMember = (channelMembers.data || []).find(
-      (m) => m.member_id === currentUser
+    const currentUserIsMember = (channelMembers().data || []).find(
+      (m) => m.member_id === currentUser,
     );
     if (!currentUserIsMember) {
       setMessage({
@@ -154,18 +160,23 @@ export function ChannelInvite(props: ChannelInviteProps) {
     }
 
     // Check if agent exists
-    const agentExists = (allAgents.data || []).find((a) => a.id === agentId);
+    const agentExists = (allAgents().data || []).find((a) => a.id === agentId);
     if (!agentExists) {
       setMessage({ type: "error", text: "Agent not found" });
       return;
     }
 
     // Check if agent is already a member
-    const isMember = (channelMembers.data || []).find(
-      (m) => m.member_id === agentId
+    const isMember = (channelMembers().data || []).find(
+      (m) => m.member_id === agentId,
     );
     if (isMember) {
       setMessage({ type: "error", text: "Agent is already a member" });
+      return;
+    }
+
+    if (!powersync) {
+      setMessage({ type: "error", text: "PowerSync not configured" });
       return;
     }
 
@@ -176,11 +187,11 @@ export function ChannelInvite(props: ChannelInviteProps) {
       const memberId = crypto.randomUUID();
       const now = new Date().toISOString();
 
-      await writeTransaction(async (tx) => {
+      await powersync.writeTransaction(async (tx) => {
         await tx.execute(
           `INSERT INTO channel_members (id, channel_id, member_type, member_id, joined_at)
            VALUES (?, ?, 'agent', ?, ?)`,
-          [memberId, props.channelId, agentId, now]
+          [memberId, props.channelId, agentId, now],
         );
       });
 
@@ -262,7 +273,7 @@ export function ChannelInvite(props: ChannelInviteProps) {
       <Show when={inviteType() === "agent"}>
         <div class="space-y-2">
           <Show
-            when={!allAgents.loading}
+            when={!allAgents().isLoading}
             fallback={
               <div class="text-xs text-gray-500">Loading agents...</div>
             }

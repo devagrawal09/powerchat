@@ -1,6 +1,6 @@
 import { createSignal, Show } from "solid-js";
-import { writeTransaction } from "~/lib/powersync";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { usePowerSync } from "~/lib/powersync-solid";
+import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 
 type UserRow = {
   id: string;
@@ -9,12 +9,13 @@ type UserRow = {
 export function UsernameRegistration(props: {
   onSuccess: (username: string) => void;
 }) {
+  const powersync = usePowerSync();
   const [username, setUsername] = createSignal("");
   const [error, setError] = createSignal("");
   const [submitting, setSubmitting] = createSignal(false);
 
   // Query existing users to check for duplicates
-  const existingUsers = useWatchedQuery<UserRow>(
+  const existingUsers = useQuery<UserRow>(
     () => `SELECT id FROM users`,
     () => []
   );
@@ -41,7 +42,7 @@ export function UsernameRegistration(props: {
     }
 
     // Check for duplicate username
-    const duplicate = (existingUsers.data || []).find(
+    const duplicate = (existingUsers().data || []).find(
       (u) => u.id.toLowerCase() === value.toLowerCase()
     );
     if (duplicate) {
@@ -53,9 +54,14 @@ export function UsernameRegistration(props: {
     setSubmitting(true);
 
     try {
+      if (!powersync) {
+        setError("PowerSync not configured");
+        return;
+      }
+
       const now = new Date().toISOString();
 
-      await writeTransaction(async (tx) => {
+      await powersync.writeTransaction(async (tx) => {
         await tx.execute(`INSERT INTO users (id, created_at) VALUES (?, ?)`, [
           value,
           now,

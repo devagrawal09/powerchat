@@ -1,11 +1,12 @@
 import { createSignal } from "solid-js";
 import { useNavigate } from "@solidjs/router";
-import { writeTransaction } from "~/lib/powersync";
 import { getUsername } from "~/lib/getUsername";
+import { usePowerSync } from "~/lib/powersync-solid";
 
 export function CreateChannel() {
   const navigate = useNavigate();
   const [creating, setCreating] = createSignal(false);
+  const powersync = usePowerSync();
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
@@ -26,7 +27,13 @@ export function CreateChannel() {
         return;
       }
 
-      await writeTransaction(async (tx) => {
+      if (!powersync) {
+        console.error("PowerSync not configured");
+        setCreating(false);
+        return;
+      }
+
+      await powersync.writeTransaction(async (tx) => {
         // Insert channel
         await tx.execute(
           `INSERT INTO channels (id, name, created_by, created_at) VALUES (?, ?, ?, datetime('now'))`,

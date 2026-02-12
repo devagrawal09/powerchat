@@ -3,6 +3,7 @@
   "type": "module",
   "scripts": {
     "dev": "mkdir -p logs && vinxi dev 2>&1 | tee logs/dev.log",
+    "dev:mock": "MOCK_LLM=1 bun dev",
     "build": "vinxi build",
     "start": "vinxi start",
     "test": "vitest",

@@ -1,4 +1,4 @@
-import { writeTransaction } from "~/lib/powersync";
+import { usePowerSync } from "~/lib/powersync-solid";
 
 type DeleteChannelProps = {
   channelId: string;
@@ -6,8 +6,14 @@ type DeleteChannelProps = {
 };
 
 export function DeleteChannel(props: DeleteChannelProps) {
+  const powersync = usePowerSync();
+
   const handleDelete = async () => {
-    await writeTransaction(async (tx) => {
+    if (!powersync) {
+      return;
+    }
+
+    await powersync.writeTransaction(async (tx) => {
       await tx.execute("DELETE FROM channels WHERE id = ?", [props.channelId]);
     });
     props.onDelete?.();
