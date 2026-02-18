@@ -1,6 +1,6 @@
 import { createSignal, Show } from "solid-js";
-import { writeTransaction } from "~/lib/powersync";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { useLiveQuery } from "@tanstack/solid-db";
+import { ensureTanStackDbReady, usersCollection } from "~/lib/tanstack-db";
 
 type UserRow = {
   id: string;
@@ -14,9 +14,8 @@ export function UsernameRegistration(props: {
   const [submitting, setSubmitting] = createSignal(false);
 
   // Query existing users to check for duplicates
-  const existingUsers = useWatchedQuery<UserRow>(
-    () => `SELECT id FROM users`,
-    () => []
+  const existingUsers = useLiveQuery((q) =>
+    q.from({ user: usersCollection }).select(({ user }) => ({ id: user.id })),
   );
 
   const handleSubmit = async (e: Event) => {
@@ -41,7 +40,7 @@ export function UsernameRegistration(props: {
     }
 
     // Check for duplicate username
-    const duplicate = (existingUsers.data || []).find(
+    const duplicate = existingUsers().find(
       (u) => u.id.toLowerCase() === value.toLowerCase()
     );
     if (duplicate) {
@@ -55,12 +54,13 @@ export function UsernameRegistration(props: {
     try {
       const now = new Date().toISOString();
 
-      await writeTransaction(async (tx) => {
-        await tx.execute(`INSERT INTO users (id, created_at) VALUES (?, ?)`, [
-          value,
-          now,
-        ]);
-      });
+      await ensureTanStackDbReady();
+      await usersCollection
+        .insert({
+          id: value,
+          created_at: now,
+        })
+        .isPersisted.promise;
 
       // Set cookie
       document.cookie = `pc_username=${value}; path=/; max-age=${

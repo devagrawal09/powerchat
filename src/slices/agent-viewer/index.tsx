@@ -1,6 +1,7 @@
 import { Show } from "solid-js";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { eq, useLiveQuery } from "@tanstack/solid-db";
 import { RenderMarkdown } from "~/components/Markdown";
+import { agentsCollection } from "~/lib/tanstack-db";
 
 type AgentRow = {
   id: string;
@@ -15,12 +16,16 @@ type AgentViewerProps = {
 };
 
 export function AgentViewer(props: AgentViewerProps) {
-  const agent = useWatchedQuery<AgentRow>(
-    () =>
-      `SELECT id, name, description, system_instructions 
-       FROM agents 
-       WHERE id = ?`,
-    () => [props.agentId]
+  const agent = useLiveQuery((q) =>
+    q
+      .from({ currentAgent: agentsCollection })
+      .where(({ currentAgent }) => eq(currentAgent.id, props.agentId))
+      .select(({ currentAgent }) => ({
+        id: currentAgent.id,
+        name: currentAgent.name,
+        description: currentAgent.description,
+        system_instructions: currentAgent.system_instructions,
+      })),
   );
 
   return (
@@ -28,7 +33,7 @@ export function AgentViewer(props: AgentViewerProps) {
       {/* Header with name and close button */}
       <div class="border-b border-gray-200 bg-white p-4 flex items-center justify-between">
         <h2 class="text-lg font-semibold text-gray-900">
-          {agent.data[0]?.name || "Agent"}
+          {agent()[0]?.name || "Agent"}
         </h2>
         <button
           onClick={props.onClose}
@@ -40,14 +45,14 @@ export function AgentViewer(props: AgentViewerProps) {
 
       {/* Agent content */}
       <div class="flex-1 overflow-y-auto p-4 bg-gray-50">
-        <Show when={agent.data.length > 0}>
+        <Show when={agent().length > 0}>
           <div class="max-w-4xl mx-auto">
             {/* Description */}
             <div class="mb-6">
               <h3 class="text-sm font-semibold text-gray-700 mb-2">
                 Description
               </h3>
-              <p class="text-sm text-gray-600">{agent.data[0].description}</p>
+              <p class="text-sm text-gray-600">{agent()[0].description}</p>
             </div>
 
             {/* System Instructions */}
@@ -57,7 +62,7 @@ export function AgentViewer(props: AgentViewerProps) {
               </h3>
               <div class="prose prose-sm max-w-none text-gray-900">
                 <RenderMarkdown>
-                  {agent.data[0].system_instructions}
+                  {agent()[0].system_instructions}
                 </RenderMarkdown>
               </div>
             </div>

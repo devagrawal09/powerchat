@@ -3,18 +3,25 @@ import { render, screen, fireEvent } from "@solidjs/testing-library";
 import { AgentViewer } from "./index";
 
 // Mock dependencies
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn(() => ({
-    data: [
-      {
-        id: "test-agent",
-        name: "Test Agent",
-        description: "A test agent",
-        system_instructions: "# Instructions\n\nTest instructions",
-      },
-    ],
-    loading: false,
-  })),
+vi.mock("@tanstack/solid-db", () => ({
+  useLiveQuery: vi.fn(() =>
+    Object.assign(
+      () => [
+        {
+          id: "test-agent",
+          name: "Test Agent",
+          description: "A test agent",
+          system_instructions: "# Instructions\n\nTest instructions",
+        },
+      ],
+      { isLoading: false, isReady: true },
+    ),
+  ),
+  eq: vi.fn(),
+}));
+
+vi.mock("~/lib/tanstack-db", () => ({
+  agentsCollection: {},
 }));
 
 vi.mock("~/components/Markdown", () => ({
@@ -59,11 +66,10 @@ describe("AgentViewer", () => {
   });
 
   it("shows default name when agent not loaded", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    vi.mocked(useWatchedQuery).mockReturnValueOnce({
-      data: [],
-      loading: false,
-    });
+    const { useLiveQuery } = await import("@tanstack/solid-db");
+    vi.mocked(useLiveQuery).mockReturnValueOnce(
+      Object.assign(() => [], { isLoading: false, isReady: true }),
+    );
 
     const onClose = vi.fn();
     render(() => <AgentViewer agentId="test-agent" onClose={onClose} />);

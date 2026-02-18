@@ -1,5 +1,6 @@
-import { For, Show } from "solid-js";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { For, Show, createMemo } from "solid-js";
+import { and, coalesce, eq, useLiveQuery } from "@tanstack/solid-db";
+import { channelMembersCollection, usersCollection } from "~/lib/tanstack-db";
 
 type MemberRow = {
   member_type: "user";
@@ -12,15 +13,29 @@ type ChannelMemberListProps = {
 };
 
 export function ChannelMemberList(props: ChannelMemberListProps) {
-  // Users in channel
-  const users = useWatchedQuery<MemberRow>(
-    () =>
-      `SELECT 'user' as member_type, cm.member_id as member_id, COALESCE(u.id, cm.member_id) as name
-       FROM channel_members cm
-       LEFT JOIN users u ON cm.member_type = 'user' AND u.id = cm.member_id
-       WHERE cm.channel_id = ? AND cm.member_type = 'user'
-       ORDER BY name`,
-    () => [props.channelId]
+  const usersInChannel = useLiveQuery((q) =>
+    q
+      .from({ member: channelMembersCollection })
+      .leftJoin({ user: usersCollection }, ({ member, user }) =>
+        eq(user.id, member.member_id),
+      )
+      .where(({ member }) =>
+        and(eq(member.channel_id, props.channelId), eq(member.member_type, "user")),
+      )
+      .orderBy(({ member, user }) => coalesce(user.id, member.member_id))
+      .select(({ member, user }) => ({
+        member_id: member.member_id,
+        user_id: user.id,
+      })),
+  );
+
+  const users = createMemo<MemberRow[]>(() =>
+    usersInChannel()
+      .map((entry) => ({
+        member_type: "user" as const,
+        member_id: entry.member_id,
+        name: entry.user_id ?? entry.member_id,
+      })),
   );
 
   return (
@@ -30,8 +45,8 @@ export function ChannelMemberList(props: ChannelMemberListProps) {
       <div class="text-xs font-semibold text-gray-500 uppercase mb-2">
         Users
       </div>
-      <Show when={!users.loading}>
-        <For each={users.data}>
+      <Show when={!usersInChannel.isLoading && usersInChannel.isReady}>
+        <For each={users()}>
           {(member) => (
             <div class="text-sm text-gray-900 py-1">{member.name}</div>
           )}

@@ -110,13 +110,13 @@ Slices are categorized by their primary responsibility:
 **Query Slices** (read-only):
 
 - Fetch and display data
-- Use PowerSync `useWatchedQuery` for reactive data
+- Use TanStack DB `useLiveQuery` over PowerSync-backed collections
 - Examples: `channel-list`, `chat-messages`, `username-check`, `channel-header`, `channel-member-list`, `channel-agents-list`, `channel-documents-list`, `document-viewer`, `agent-viewer`, `mention-autocomplete`
 
 **Mutation Slices** (write operations):
 
 - Handle user actions that modify data
-- Use PowerSync `writeTransaction` or server actions
+- Use collection `insert`/`update`/`delete` operations or server actions
 - Examples: `create-channel`, `chat-input`, `username-registration`, `channel-invite`, `create-agent`, `delete-channel`
 
 **Key Principle**: Each slice is **either a query OR a mutation**, never both. This ensures clear separation of concerns.
@@ -164,8 +164,8 @@ import { render, screen } from "@solidjs/testing-library";
 import { MySlice } from "./index";
 
 // Mock dependencies
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn(() => ({ data: [], loading: false })),
+vi.mock("@tanstack/solid-db", () => ({
+  useLiveQuery: vi.fn(() => Object.assign(() => [], { isLoading: false, isReady: true })),
 }));
 
 describe("MySlice", () => {
@@ -238,7 +238,7 @@ Agents are encouraged to delegate tasks to specialized agents:
 
 - `src/middleware.ts` - Sets anonymous user cookie
 - `src/lib/powersync.ts` - PowerSync client + schema
-- `src/lib/useWatchedQuery.ts` - Hook for reactive PowerSync queries
+- `src/lib/tanstack-db.ts` - TanStack DB collections over PowerSync tables
 - `src/server/powersync.ts` - PowerSync JWT token generation (`getPowerSyncToken`) and upload handler (`uploadData`)
 - `src/server/db.ts` - Neon connection pool
 - `src/server/agent.ts` - Mastra agent execution with document tools and logging

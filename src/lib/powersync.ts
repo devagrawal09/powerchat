@@ -6,7 +6,6 @@ import {
   LogLevel,
 } from "@powersync/web";
 import { column, Schema, Table } from "@powersync/web";
-import { Transaction } from "@powersync/common";
 import {
   getPowerSyncToken,
   uploadData as uploadToServer,
@@ -62,7 +61,7 @@ class PowerChatConnector implements PowerSyncBackendConnector {
 }
 
 // Define schema matching our Neon tables using new API
-const schema = new Schema({
+export const powerchatSchema = new Schema({
   users: new Table({
     id: column.text,
     created_at: column.text,
@@ -124,33 +123,31 @@ const schema = new Schema({
   ),
 });
 
-let db: PowerSyncDatabase | null = null;
+export const powerSyncDb = new PowerSyncDatabase({
+  schema: powerchatSchema,
+  database: {
+    dbFilename: "powerchat.db",
+  },
+});
+
+let connectPromise: Promise<void> | null = null;
 
 const logger = createBaseLogger();
 logger.setLevel(LogLevel.DEBUG);
 
 export async function getPowerSync() {
-  if (!db) {
-    db = new PowerSyncDatabase({
-      schema,
-      database: {
-        dbFilename: "powerchat.db",
-      },
+  if (!connectPromise) {
+    connectPromise = (async () => {
+      const connector = new PowerChatConnector();
+      await powerSyncDb.connect(connector);
+      await powerSyncDb.waitForReady();
+      console.log("[getPowerSync] db connected");
+    })().catch((error) => {
+      connectPromise = null;
+      throw error;
     });
-
-    // Connect to PowerSync Service
-    const connector = new PowerChatConnector();
-    await db.connect(connector);
-    await db.waitForReady();
-    console.log("[getPowerSync] db connected");
   }
-  return db;
-}
 
-// Helper to execute writes
-export async function writeTransaction<T>(
-  callback: (tx: Transaction) => Promise<T>,
-): Promise<T> {
-  const powersync = await getPowerSync();
-  return powersync.writeTransaction(callback);
+  await connectPromise;
+  return powerSyncDb;
 }

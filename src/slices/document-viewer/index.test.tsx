@@ -3,18 +3,25 @@ import { render, screen, fireEvent } from "@solidjs/testing-library";
 import { DocumentViewer } from "./index";
 
 // Mock dependencies
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn(() => ({
-    data: [
-      {
-        id: "test-doc",
-        title: "Test Document",
-        description: "A test document",
-        content: "# Content\n\nTest content here",
-      },
-    ],
-    loading: false,
-  })),
+vi.mock("@tanstack/solid-db", () => ({
+  useLiveQuery: vi.fn(() =>
+    Object.assign(
+      () => [
+        {
+          id: "test-doc",
+          title: "Test Document",
+          description: "A test document",
+          content: "# Content\n\nTest content here",
+        },
+      ],
+      { isLoading: false, isReady: true },
+    ),
+  ),
+  eq: vi.fn(),
+}));
+
+vi.mock("~/lib/tanstack-db", () => ({
+  documentsCollection: {},
 }));
 
 vi.mock("~/components/Markdown", () => ({
@@ -55,17 +62,14 @@ describe("DocumentViewer", () => {
   it("renders document content", () => {
     const onClose = vi.fn();
     render(() => <DocumentViewer documentId="test-doc" onClose={onClose} />);
-    expect(
-      screen.getByText("# Content\n\nTest content here")
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Test content here/)).toBeInTheDocument();
   });
 
   it("shows default title when document not loaded", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    vi.mocked(useWatchedQuery).mockReturnValueOnce({
-      data: [],
-      loading: false,
-    });
+    const { useLiveQuery } = await import("@tanstack/solid-db");
+    vi.mocked(useLiveQuery).mockReturnValueOnce(
+      Object.assign(() => [], { isLoading: false, isReady: true }),
+    );
 
     const onClose = vi.fn();
     render(() => <DocumentViewer documentId="test-doc" onClose={onClose} />);

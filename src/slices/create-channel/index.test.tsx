@@ -3,8 +3,18 @@ import { render, screen, fireEvent } from "@solidjs/testing-library";
 import { CreateChannel } from "./index";
 
 // Mock dependencies
-vi.mock("~/lib/powersync", () => ({
-  writeTransaction: vi.fn(),
+vi.mock("@solidjs/router", () => ({
+  useNavigate: vi.fn(() => vi.fn()),
+}));
+
+vi.mock("~/lib/tanstack-db", () => ({
+  channelMembersCollection: {
+    insert: vi.fn(() => ({ isPersisted: { promise: Promise.resolve() } })),
+  },
+  channelsCollection: {
+    insert: vi.fn(() => ({ isPersisted: { promise: Promise.resolve() } })),
+  },
+  ensureTanStackDbReady: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("~/lib/getUsername", () => ({
@@ -12,8 +22,17 @@ vi.mock("~/lib/getUsername", () => ({
 }));
 
 describe("CreateChannel", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    const { channelsCollection, channelMembersCollection } = await import(
+      "~/lib/tanstack-db"
+    );
+    vi.mocked(channelsCollection.insert).mockReturnValue(
+      ({ isPersisted: { promise: Promise.resolve() } }) as any,
+    );
+    vi.mocked(channelMembersCollection.insert).mockReturnValue(
+      ({ isPersisted: { promise: Promise.resolve() } }) as any,
+    );
   });
 
   it("renders form with input and button", () => {
@@ -23,12 +42,16 @@ describe("CreateChannel", () => {
   });
 
   it("shows 'Creating...' while submitting", async () => {
-    const { writeTransaction } = await import("~/lib/powersync");
-    vi.mocked(writeTransaction).mockImplementation(
+    const { channelsCollection } = await import("~/lib/tanstack-db");
+    vi.mocked(channelsCollection.insert).mockImplementation(
       () =>
-        new Promise((resolve) => {
-          setTimeout(resolve, 1000);
-        })
+        ({
+          isPersisted: {
+            promise: new Promise((resolve) => {
+              setTimeout(resolve, 1000);
+            }),
+          },
+        }) as any,
     );
 
     render(() => <CreateChannel />);
@@ -41,9 +64,10 @@ describe("CreateChannel", () => {
     expect(screen.getByText("Creating...")).toBeInTheDocument();
   });
 
-  it("calls writeTransaction with correct data", async () => {
-    const { writeTransaction } = await import("~/lib/powersync");
-    vi.mocked(writeTransaction).mockResolvedValue(undefined);
+  it("calls collection inserts with correct data", async () => {
+    const { channelsCollection, channelMembersCollection } = await import(
+      "~/lib/tanstack-db"
+    );
 
     render(() => <CreateChannel />);
     const input = screen.getByPlaceholderText("New channel name");
@@ -55,12 +79,15 @@ describe("CreateChannel", () => {
     // Wait for async operations
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    expect(writeTransaction).toHaveBeenCalled();
+    expect(channelsCollection.insert).toHaveBeenCalled();
+    expect(channelMembersCollection.insert).toHaveBeenCalledTimes(2);
   });
 
   it("clears form after successful creation", async () => {
-    const { writeTransaction } = await import("~/lib/powersync");
-    vi.mocked(writeTransaction).mockResolvedValue(undefined);
+    const { channelsCollection } = await import("~/lib/tanstack-db");
+    vi.mocked(channelsCollection.insert).mockReturnValue(
+      ({ isPersisted: { promise: Promise.resolve() } }) as any,
+    );
 
     render(() => <CreateChannel />);
     const input = screen.getByPlaceholderText(
@@ -90,8 +117,7 @@ describe("CreateChannel", () => {
   });
 
   it("validates channel name before submission", async () => {
-    const { writeTransaction } = await import("~/lib/powersync");
-    vi.mocked(writeTransaction).mockResolvedValue(undefined);
+    const { channelsCollection } = await import("~/lib/tanstack-db");
 
     render(() => <CreateChannel />);
     const input = screen.getByPlaceholderText("New channel name");
@@ -103,7 +129,6 @@ describe("CreateChannel", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // writeTransaction should not be called for invalid input
-    expect(writeTransaction).not.toHaveBeenCalled();
+    expect(channelsCollection.insert).not.toHaveBeenCalled();
   });
 });

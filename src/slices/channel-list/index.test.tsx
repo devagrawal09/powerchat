@@ -22,11 +22,17 @@ const mockChannels = [
   },
 ];
 
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn(() => ({
-    data: mockChannels,
-    loading: false,
-  })),
+vi.mock("@tanstack/solid-db", () => ({
+  useLiveQuery: vi.fn(() =>
+    Object.assign(() => mockChannels, { isLoading: false, isReady: true }),
+  ),
+  and: vi.fn(),
+  eq: vi.fn(),
+}));
+
+vi.mock("~/lib/tanstack-db", () => ({
+  channelMembersCollection: {},
+  channelsCollection: {},
 }));
 
 vi.mock("~/slices/delete-channel", () => ({
@@ -58,13 +64,10 @@ describe("ChannelList", () => {
   });
 
   it("shows loading state while query is loading", async () => {
-    // Import and mock for this specific test
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    vi.mocked(useWatchedQuery).mockReturnValueOnce({
-      data: [],
-      loading: true,
-      error: undefined,
-    });
+    const { useLiveQuery } = await import("@tanstack/solid-db");
+    vi.mocked(useLiveQuery).mockReturnValueOnce(
+      Object.assign(() => [], { isLoading: true, isReady: false }),
+    );
 
     render(() => <ChannelList />);
     expect(screen.getByText("Loading...")).toBeInTheDocument();

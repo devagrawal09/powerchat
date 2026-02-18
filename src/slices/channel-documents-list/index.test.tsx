@@ -3,22 +3,29 @@ import { render, screen, fireEvent } from "@solidjs/testing-library";
 import { ChannelDocumentsList } from "./index";
 
 // Mock dependencies
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn(() => ({
-    data: [
-      {
-        id: "doc-1",
-        title: "Project Plan",
-        description: "Main project plan document",
-      },
-      {
-        id: "doc-2",
-        title: "Meeting Notes",
-        description: "Notes from team meeting",
-      },
-    ],
-    loading: false,
-  })),
+vi.mock("@tanstack/solid-db", () => ({
+  useLiveQuery: vi.fn(() =>
+    Object.assign(
+      () => [
+        {
+          id: "doc-1",
+          title: "Project Plan",
+          description: "Main project plan document",
+        },
+        {
+          id: "doc-2",
+          title: "Meeting Notes",
+          description: "Notes from team meeting",
+        },
+      ],
+      { isLoading: false, isReady: true },
+    ),
+  ),
+  eq: vi.fn(),
+}));
+
+vi.mock("~/lib/tanstack-db", () => ({
+  documentsCollection: {},
 }));
 
 describe("ChannelDocumentsList", () => {
@@ -63,11 +70,10 @@ describe("ChannelDocumentsList", () => {
   });
 
   it("handles empty document list", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    vi.mocked(useWatchedQuery).mockReturnValueOnce({
-      data: [],
-      loading: false,
-    });
+    const { useLiveQuery } = await import("@tanstack/solid-db");
+    vi.mocked(useLiveQuery).mockReturnValueOnce(
+      Object.assign(() => [], { isLoading: false, isReady: true }),
+    );
 
     const onDocumentClick = vi.fn();
     render(() => (
@@ -81,11 +87,10 @@ describe("ChannelDocumentsList", () => {
   });
 
   it("hides content while loading", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    vi.mocked(useWatchedQuery).mockReturnValueOnce({
-      data: [],
-      loading: true,
-    });
+    const { useLiveQuery } = await import("@tanstack/solid-db");
+    vi.mocked(useLiveQuery).mockReturnValueOnce(
+      Object.assign(() => [], { isLoading: true, isReady: false }),
+    );
 
     const onDocumentClick = vi.fn();
     render(() => (

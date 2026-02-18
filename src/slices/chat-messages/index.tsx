@@ -1,8 +1,14 @@
 import { For, Show, createMemo, createEffect } from "solid-js";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { and, eq, useLiveQuery } from "@tanstack/solid-db";
 import { RenderMarkdown } from "~/components/Markdown";
 import { getUsername } from "~/lib/getUsername";
-import { writeTransaction } from "~/lib/powersync";
+import {
+  agentsCollection,
+  channelMembersCollection,
+  ensureTanStackDbReady,
+  messagesCollection,
+  usersCollection,
+} from "~/lib/tanstack-db";
 
 type MessageRow = {
   id: string;
@@ -26,36 +32,55 @@ type ChatMessagesProps = {
 export function ChatMessages(props: ChatMessagesProps) {
   let scrollContainer: HTMLDivElement | undefined;
 
-  // Query messages without JOINs - enables trigger-based diffs later
-  const messages = useWatchedQuery<MessageRow>(
-    () =>
-      `SELECT *
-       FROM messages
-       WHERE channel_id = ?
-       ORDER BY created_at ASC, id ASC`,
-    () => [props.channelId],
+  const messages = useLiveQuery((q) =>
+    q
+      .from({ message: messagesCollection })
+      .where(({ message }) => eq(message.channel_id, props.channelId))
+      .orderBy(({ message }) => message.created_at, "asc")
+      .orderBy(({ message }) => message.id, "asc")
+      .select(({ message }) => ({
+        id: message.id,
+        channel_id: message.channel_id,
+        author_type: message.author_type,
+        author_id: message.author_id,
+        content: message.content,
+        created_at: message.created_at,
+      })),
   );
 
-  // Query channel members separately for author name lookup
-  const members = useWatchedQuery<MemberRow>(
-    () =>
-      `SELECT cm.member_type, cm.member_id,
-              CASE
-                WHEN cm.member_type = 'user' THEN COALESCE(u.id, cm.member_id)
-                WHEN cm.member_type = 'agent' THEN COALESCE(a.name, 'Agent')
-                ELSE cm.member_id
-              END AS name
-       FROM channel_members cm
-       LEFT JOIN users u ON cm.member_type = 'user' AND u.id = cm.member_id
-       LEFT JOIN agents a ON cm.member_type = 'agent' AND a.id = cm.member_id
-       WHERE cm.channel_id = ?`,
-    () => [props.channelId],
+  const membersInChannel = useLiveQuery((q) =>
+    q
+      .from({ member: channelMembersCollection })
+      .leftJoin({ user: usersCollection }, ({ member, user }) =>
+        eq(user.id, member.member_id),
+      )
+      .leftJoin({ agent: agentsCollection }, ({ member, agent }) =>
+        eq(agent.id, member.member_id),
+      )
+      .where(({ member }) => eq(member.channel_id, props.channelId))
+      .select(({ member, user, agent }) => ({
+        member_type: member.member_type,
+        member_id: member.member_id,
+        user_name: user.id,
+        agent_name: agent.name,
+      })),
+  );
+
+  const members = createMemo<MemberRow[]>(() =>
+    membersInChannel().map((member) => ({
+      member_type: member.member_type,
+      member_id: member.member_id,
+      name:
+        member.member_type === "user"
+          ? (member.user_name ?? member.member_id)
+          : (member.agent_name ?? "Agent"),
+    })),
   );
 
   // Create lookup map: (author_type, author_id) -> name
   const authorNameMap = createMemo(() => {
     const map = new Map<string, string>();
-    (members.data || []).forEach((member) => {
+    members().forEach((member) => {
       const key = `${member.member_type}:${member.member_id}`;
       map.set(key, member.name || member.member_id);
     });
@@ -72,17 +97,17 @@ export function ChatMessages(props: ChatMessagesProps) {
   };
 
   createEffect(() => {
-    const m = JSON.stringify(messages.data, null, 2);
+    const m = JSON.stringify(messages(), null, 2);
     console.log("messages", m);
   });
 
   const currentUsername = createMemo(() => getUsername());
 
   // Track message count to detect new messages
-  const messageCount = createMemo(() => messages.data.length);
+  const messageCount = createMemo(() => messages().length);
   const lastMessageId = createMemo(() =>
-    messages.data.length > 0
-      ? messages.data[messages.data.length - 1]?.id
+    messages().length > 0
+      ? messages()[messages().length - 1]?.id
       : null,
   );
 
@@ -91,7 +116,7 @@ export function ChatMessages(props: ChatMessagesProps) {
     props.channelId; // Track channelId changes
     messageCount(); // Track message count changes
     lastMessageId(); // Track last message ID changes
-    if (!messages.loading && scrollContainer) {
+    if (!messages.isLoading && messages.isReady && scrollContainer) {
       // Use setTimeout to ensure DOM has updated
       setTimeout(() => {
         scrollContainer!.scrollTop = scrollContainer!.scrollHeight;
@@ -100,11 +125,12 @@ export function ChatMessages(props: ChatMessagesProps) {
   });
 
   // Check if message mentions current user
-  const isMentioned = (content: string) => {
+  const isMentioned = (content: string | null | undefined) => {
+    if (!content) return false;
     const username = currentUsername();
     if (!username) return false;
-    const mentions = Array.from(content.matchAll(/@([a-z0-9_]+)/gi)).map((m) =>
-      m[1].toLowerCase().trim(),
+    const mentions = Array.from(String(content).matchAll(/@([a-z0-9_]+)/gi)).map(
+      (m) => m[1].toLowerCase().trim(),
     );
     const normalizedUsername = username.toLowerCase().trim();
     return mentions.includes(normalizedUsername);
@@ -122,9 +148,8 @@ export function ChatMessages(props: ChatMessagesProps) {
 
   // Delete message handler
   const handleDeleteMessage = async (messageId: string) => {
-    await writeTransaction(async (tx) => {
-      await tx.execute("DELETE FROM messages WHERE id = ?", [messageId]);
-    });
+    await ensureTanStackDbReady();
+    await messagesCollection.delete(messageId).isPersisted.promise;
   };
 
   return (
@@ -133,14 +158,14 @@ export function ChatMessages(props: ChatMessagesProps) {
       class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50"
     >
       <Show
-        when={!messages.loading}
+        when={!messages.isLoading && messages.isReady}
         fallback={<div class="text-sm text-gray-500">Loading messages...</div>}
       >
         <Show
-          when={messages.data.length > 0}
+          when={messages().length > 0}
           fallback={<div class="text-sm text-gray-500">No messages yet</div>}
         >
-          <For each={messages.data}>
+          <For each={messages()}>
             {(message) => {
               const authorName = createMemo(() => getAuthorName(message));
               const mentioned = createMemo(() => isMentioned(message.content));

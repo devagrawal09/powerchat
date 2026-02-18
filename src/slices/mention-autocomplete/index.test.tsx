@@ -2,18 +2,52 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@solidjs/testing-library";
 import { MentionAutocomplete } from "./index";
 
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn(() => ({
-    data: [
-      { member_type: "user", member_id: "user1", name: "alice" },
-      {
-        member_type: "agent",
-        member_id: "00000000-0000-0000-0000-000000000001",
-        name: "Assistant",
-      },
-    ],
-    loading: false,
-  })),
+vi.mock("@tanstack/solid-db", () => ({
+  useLiveQuery: (() => {
+    let callCount = 0;
+    return vi.fn(() => {
+      callCount += 1;
+      if (callCount % 2 === 1) {
+        return Object.assign(
+          () => [
+            {
+              member_type: "user",
+              member_id: "user1",
+              user_name: "alice",
+              agent_name: null,
+            },
+            {
+              member_type: "agent",
+              member_id: "00000000-0000-0000-0000-000000000001",
+              user_name: null,
+              agent_name: "Assistant",
+            },
+          ],
+          { isLoading: false, isReady: true },
+        );
+      }
+      return Object.assign(
+        () => [
+          {
+            id: "doc-1",
+            title: "Project Plan",
+            description: "Main plan",
+          },
+        ],
+        { isLoading: false, isReady: true },
+      );
+    });
+  })(),
+  and: vi.fn(),
+  coalesce: vi.fn(),
+  eq: vi.fn(),
+}));
+
+vi.mock("~/lib/tanstack-db", () => ({
+  agentsCollection: {},
+  channelMembersCollection: {},
+  documentsCollection: {},
+  usersCollection: {},
 }));
 
 describe("MentionAutocomplete", () => {
@@ -26,6 +60,7 @@ describe("MentionAutocomplete", () => {
       <MentionAutocomplete
         channelId="test-channel"
         mentionQuery=""
+        mentionType="@"
         isOpen={false}
         activeIndex={0}
         onSelect={vi.fn()}
@@ -40,6 +75,7 @@ describe("MentionAutocomplete", () => {
       <MentionAutocomplete
         channelId="test-channel"
         mentionQuery="ass"
+        mentionType="@"
         isOpen={true}
         activeIndex={0}
         onSelect={vi.fn()}
@@ -56,6 +92,7 @@ describe("MentionAutocomplete", () => {
       <MentionAutocomplete
         channelId="test-channel"
         mentionQuery=""
+        mentionType="@"
         isOpen={true}
         activeIndex={0}
         onSelect={onSelect}
@@ -75,6 +112,7 @@ describe("MentionAutocomplete", () => {
       <MentionAutocomplete
         channelId="test-channel"
         mentionQuery=""
+        mentionType="@"
         isOpen={true}
         activeIndex={0}
         onSelect={vi.fn()}
@@ -93,6 +131,7 @@ describe("MentionAutocomplete", () => {
       <MentionAutocomplete
         channelId="test-channel"
         mentionQuery=""
+        mentionType="@"
         isOpen={true}
         activeIndex={0}
         onSelect={vi.fn()}

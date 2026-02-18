@@ -1,4 +1,4 @@
-import { writeTransaction } from "~/lib/powersync";
+import { channelsCollection, ensureTanStackDbReady } from "~/lib/tanstack-db";
 
 type DeleteChannelProps = {
   channelId: string;
@@ -7,9 +7,8 @@ type DeleteChannelProps = {
 
 export function DeleteChannel(props: DeleteChannelProps) {
   const handleDelete = async () => {
-    await writeTransaction(async (tx) => {
-      await tx.execute("DELETE FROM channels WHERE id = ?", [props.channelId]);
-    });
+    await ensureTanStackDbReady();
+    await channelsCollection.delete(props.channelId).isPersisted.promise;
     props.onDelete?.();
   };
 

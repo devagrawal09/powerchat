@@ -2,8 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@solidjs/testing-library";
 import { DeleteChannel } from "./index";
 
-vi.mock("~/lib/powersync", () => ({
-  writeTransaction: vi.fn(),
+vi.mock("~/lib/tanstack-db", () => ({
+  channelsCollection: {
+    delete: vi.fn(() => ({ isPersisted: { promise: Promise.resolve() } })),
+  },
+  ensureTanStackDbReady: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe("DeleteChannel", () => {
@@ -18,9 +21,8 @@ describe("DeleteChannel", () => {
     expect(button.textContent).toBe("×");
   });
 
-  it("calls writeTransaction on click", async () => {
-    const { writeTransaction } = await import("~/lib/powersync");
-    vi.mocked(writeTransaction).mockResolvedValue(undefined);
+  it("calls collection delete on click", async () => {
+    const { channelsCollection } = await import("~/lib/tanstack-db");
 
     render(() => <DeleteChannel channelId="test-channel" />);
     const button = screen.getByLabelText("Delete channel");
@@ -28,12 +30,10 @@ describe("DeleteChannel", () => {
     fireEvent.click(button);
 
     await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(writeTransaction).toHaveBeenCalled();
+    expect(channelsCollection.delete).toHaveBeenCalledWith("test-channel");
   });
 
   it("calls onDelete callback after deletion", async () => {
-    const { writeTransaction } = await import("~/lib/powersync");
-    vi.mocked(writeTransaction).mockResolvedValue(undefined);
     const onDelete = vi.fn();
 
     render(() => (

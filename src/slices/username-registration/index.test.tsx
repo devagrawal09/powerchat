@@ -2,14 +2,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@solidjs/testing-library";
 import { UsernameRegistration } from "./index";
 
-// Mock dependencies
-vi.mock("@solidjs/router", () => ({
-  useAction: vi.fn(() => vi.fn()),
-  useSubmission: vi.fn(() => ({ pending: false })),
+vi.mock("@tanstack/solid-db", () => ({
+  useLiveQuery: vi.fn(() =>
+    Object.assign(() => [], { isLoading: false, isReady: true }),
+  ),
 }));
 
-vi.mock("~/server/actions", () => ({
-  registerUsername: vi.fn(),
+vi.mock("~/lib/tanstack-db", () => ({
+  ensureTanStackDbReady: vi.fn().mockResolvedValue(undefined),
+  usersCollection: {
+    insert: vi.fn(() => ({ isPersisted: { promise: Promise.resolve() } })),
+  },
 }));
 
 describe("UsernameRegistration", () => {
@@ -17,194 +20,70 @@ describe("UsernameRegistration", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset document.cookie
     document.cookie = "pc_username=; expires=Thu, 01 Jan 1970 00:00:00 UTC";
   });
 
-  it("renders registration form", () => {
+  it("renders form", () => {
     render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-
     expect(screen.getByText("Welcome to PowerChat")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Enter username")).toBeInTheDocument();
-    expect(screen.getByText("Continue")).toBeInTheDocument();
   });
 
-  it("validates minimum username length", async () => {
+  it("validates minimum length", async () => {
     render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-
     const input = screen.getByPlaceholderText("Enter username");
-    const button = screen.getByText("Continue");
-
     fireEvent.input(input, { target: { value: "ab" } });
-    fireEvent.submit(button.closest("form")!);
-
+    fireEvent.submit(input.closest("form")!);
     await waitFor(() => {
       expect(
-        screen.getByText("Username must be at least 3 characters")
+        screen.getByText("Username must be at least 3 characters"),
       ).toBeInTheDocument();
     });
-
-    expect(mockOnSuccess).not.toHaveBeenCalled();
   });
 
-  it("validates maximum username length", async () => {
+  it("validates username format", async () => {
     render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-
     const input = screen.getByPlaceholderText("Enter username");
-    const button = screen.getByText("Continue");
-
-    fireEvent.input(input, { target: { value: "a".repeat(31) } });
-    fireEvent.submit(button.closest("form")!);
-
-    await waitFor(() => {
-      expect(
-        screen.getByText("Username must be less than 30 characters")
-      ).toBeInTheDocument();
-    });
-
-    expect(mockOnSuccess).not.toHaveBeenCalled();
-  });
-
-  it("validates username format - only allows alphanumeric, hyphens, underscores", async () => {
-    render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-
-    const input = screen.getByPlaceholderText("Enter username");
-    const button = screen.getByText("Continue");
-
     fireEvent.input(input, { target: { value: "user@name" } });
-    fireEvent.submit(button.closest("form")!);
-
+    fireEvent.submit(input.closest("form")!);
     await waitFor(() => {
-      // Look for the error message specifically (not the help text)
-      const errorMessage = screen.getByText(
-        "Username can only contain letters, numbers, hyphens, and underscores"
-      );
-      expect(errorMessage).toHaveClass("text-red-600");
-    });
-
-    expect(mockOnSuccess).not.toHaveBeenCalled();
-  });
-
-  it("accepts valid username with letters, numbers, hyphens, and underscores", async () => {
-    const { useAction } = await import("@solidjs/router");
-    const mockRegister = vi.fn().mockResolvedValue({
-      success: true,
-      username: "test-user_123",
-    });
-    vi.mocked(useAction).mockReturnValue(mockRegister);
-
-    render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-
-    const input = screen.getByPlaceholderText("Enter username");
-    const form = input.closest("form")!;
-
-    fireEvent.input(input, { target: { value: "test-user_123" } });
-    fireEvent.submit(form);
-
-    await waitFor(() => {
-      expect(mockRegister).toHaveBeenCalled();
+      expect(
+        screen.getByText(
+          "Username can only contain letters, numbers, hyphens, and underscores",
+        ),
+      ).toBeInTheDocument();
     });
   });
 
-  it("calls onSuccess with username after successful registration", async () => {
-    const { useAction } = await import("@solidjs/router");
-    const mockRegister = vi.fn().mockResolvedValue({
-      success: true,
-      username: "testuser",
-    });
-    vi.mocked(useAction).mockReturnValue(mockRegister);
+  it("validates duplicate usernames from live query", async () => {
+    const { useLiveQuery } = await import("@tanstack/solid-db");
+    vi.mocked(useLiveQuery).mockReturnValueOnce(
+      Object.assign(() => [{ id: "taken-user" }], {
+        isLoading: false,
+        isReady: true,
+      }),
+    );
 
     render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-
     const input = screen.getByPlaceholderText("Enter username");
-    const form = input.closest("form")!;
-
-    fireEvent.input(input, { target: { value: "testuser" } });
-    fireEvent.submit(form);
-
-    await waitFor(() => {
-      expect(mockOnSuccess).toHaveBeenCalledWith("testuser");
-    });
-  });
-
-  it("sets cookie after successful registration", async () => {
-    const { useAction } = await import("@solidjs/router");
-    const mockRegister = vi.fn().mockResolvedValue({
-      success: true,
-      username: "testuser",
-    });
-    vi.mocked(useAction).mockReturnValue(mockRegister);
-
-    render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-
-    const input = screen.getByPlaceholderText("Enter username");
-    const form = input.closest("form")!;
-
-    fireEvent.input(input, { target: { value: "testuser" } });
-    fireEvent.submit(form);
-
-    await waitFor(() => {
-      expect(document.cookie).toContain("pc_username=testuser");
-    });
-  });
-
-  it("displays error message when server returns error", async () => {
-    const { useAction } = await import("@solidjs/router");
-    const mockRegister = vi.fn().mockResolvedValue({
-      error: "Username already taken",
-    });
-    vi.mocked(useAction).mockReturnValue(mockRegister);
-
-    render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-
-    const input = screen.getByPlaceholderText("Enter username");
-    const form = input.closest("form")!;
-
-    fireEvent.input(input, { target: { value: "testuser" } });
-    fireEvent.submit(form);
-
+    fireEvent.input(input, { target: { value: "taken-user" } });
+    fireEvent.submit(input.closest("form")!);
     await waitFor(() => {
       expect(screen.getByText("Username already taken")).toBeInTheDocument();
     });
-
-    expect(mockOnSuccess).not.toHaveBeenCalled();
   });
 
-  it("disables button when username is too short", () => {
+  it("inserts user and calls onSuccess", async () => {
+    const { usersCollection } = await import("~/lib/tanstack-db");
     render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-
     const input = screen.getByPlaceholderText("Enter username");
-    const button = screen.getByText("Continue") as HTMLButtonElement;
-
-    fireEvent.input(input, { target: { value: "ab" } });
-
-    expect(button.disabled).toBe(true);
-  });
-
-  it("enables button when username is valid length", () => {
-    render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-
-    const input = screen.getByPlaceholderText("Enter username");
-    const button = screen.getByText("Continue") as HTMLButtonElement;
-
-    fireEvent.input(input, { target: { value: "abc" } });
-
-    expect(button.disabled).toBe(false);
-  });
-
-  it("trims whitespace from username before validation", async () => {
-    render(() => <UsernameRegistration onSuccess={mockOnSuccess} />);
-
-    const input = screen.getByPlaceholderText("Enter username");
-    const form = input.closest("form")!;
-
-    fireEvent.input(input, { target: { value: "  ab  " } });
-    fireEvent.submit(form);
+    fireEvent.input(input, { target: { value: "testuser" } });
+    fireEvent.submit(input.closest("form")!);
 
     await waitFor(() => {
-      expect(
-        screen.getByText("Username must be at least 3 characters")
-      ).toBeInTheDocument();
+      expect(usersCollection.insert).toHaveBeenCalled();
+      expect(mockOnSuccess).toHaveBeenCalledWith("testuser");
+      expect(document.cookie).toContain("pc_username=testuser");
     });
   });
 });

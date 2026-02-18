@@ -1,4 +1,4 @@
-import { JSX, Show } from "solid-js";
+import { JSX, Show, createMemo, createSignal } from "solid-js";
 import { ChannelList } from "~/slices/channel-list";
 import { CreateChannel } from "~/slices/create-channel";
 import { UsernameCheck } from "~/slices/username-check";
@@ -6,9 +6,15 @@ import { UsernameRegistration } from "~/slices/username-registration";
 
 export default function ChatLayout(props: { children?: JSX.Element }) {
   const usernameCheck = UsernameCheck();
+  const [registeredUsername, setRegisteredUsername] = createSignal<
+    string | null
+  >(null);
+  const activeUsername = createMemo(
+    () => registeredUsername() ?? usernameCheck.username(),
+  );
 
   const handleUsernameSet = (username: string) => {
-    // Cookie is set by mutation slice, query slice will detect it
+    setRegisteredUsername(username);
   };
 
   return (
@@ -24,7 +30,7 @@ export default function ChatLayout(props: { children?: JSX.Element }) {
             <h1 class="text-xl font-bold text-gray-900">PowerChat</h1>
           </div>
 
-          <ChannelList />
+          <ChannelList username={activeUsername()} />
           <CreateChannel />
         </div>
 

@@ -33,11 +33,20 @@ const mockMessages = [
   },
 ];
 
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn(() => ({
-    data: mockMessages,
-    loading: false,
-  })),
+vi.mock("@tanstack/solid-db", () => ({
+  useLiveQuery: vi.fn(),
+  and: vi.fn(),
+  eq: vi.fn(),
+}));
+
+vi.mock("~/lib/tanstack-db", () => ({
+  agentsCollection: {},
+  channelMembersCollection: {},
+  ensureTanStackDbReady: vi.fn().mockResolvedValue(undefined),
+  messagesCollection: {
+    delete: vi.fn(() => ({ isPersisted: { promise: Promise.resolve() } })),
+  },
+  usersCollection: {},
 }));
 
 vi.mock("~/components/Markdown", () => ({
@@ -47,8 +56,33 @@ vi.mock("~/components/Markdown", () => ({
 }));
 
 describe("ChatMessages", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    const { useLiveQuery } = await import("@tanstack/solid-db");
+    let callCount = 0;
+    vi.mocked(useLiveQuery).mockImplementation(() => {
+      callCount += 1;
+      if (callCount % 2 === 1) {
+        return Object.assign(() => mockMessages, { isLoading: false, isReady: true });
+      }
+      return Object.assign(
+        () => [
+          {
+            member_type: "user",
+            member_id: "user-1",
+            user_name: "user-1",
+            agent_name: null,
+          },
+          {
+            member_type: "agent",
+            member_id: "00000000-0000-0000-0000-000000000001",
+            user_name: null,
+            agent_name: "Assistant",
+          },
+        ],
+        { isLoading: false, isReady: true },
+      );
+    });
   });
 
   it("renders all messages", () => {
@@ -86,39 +120,29 @@ describe("ChatMessages", () => {
   });
 
   it("shows loading state", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    vi.mocked(useWatchedQuery).mockReturnValueOnce({
-      data: [],
-      loading: true,
-      error: undefined,
-    });
+    const { useLiveQuery } = await import("@tanstack/solid-db");
+    vi.mocked(useLiveQuery).mockReturnValueOnce(
+      Object.assign(() => [], { isLoading: true, isReady: false }),
+    );
 
-    const { container } = render(() => <ChatMessages channelId="channel-1" />);
-
-    // When loading, the For loop won't render any messages
-    // Check that the container doesn't have message elements
-    const messageElements = container.querySelectorAll(".flex.gap-3");
-    expect(messageElements.length).toBe(0);
+    render(() => <ChatMessages channelId="channel-1" />);
+    expect(screen.getByText("Loading messages...")).toBeInTheDocument();
   });
 
   it("renders empty state when no messages", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    vi.mocked(useWatchedQuery).mockReturnValueOnce({
-      data: [],
-      loading: false,
-      error: undefined,
-    });
-
-    const { container } = render(() => <ChatMessages channelId="channel-1" />);
-
-    const messageElements = container.querySelectorAll(".flex.gap-3");
-    expect(messageElements.length).toBe(0);
+    const { useLiveQuery } = await import("@tanstack/solid-db");
+    vi.mocked(useLiveQuery).mockReturnValueOnce(
+      Object.assign(() => [], { isLoading: false, isReady: true }),
+    );
+    render(() => <ChatMessages channelId="channel-1" />);
+    expect(screen.getByText("No messages yet")).toBeInTheDocument();
   });
 
   it("handles missing author_name gracefully", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    vi.mocked(useWatchedQuery).mockReturnValueOnce({
-      data: [
+    const { useLiveQuery } = await import("@tanstack/solid-db");
+    vi.mocked(useLiveQuery).mockReturnValueOnce(
+      Object.assign(
+        () => [
         {
           id: "msg-4",
           channel_id: "channel-1",
@@ -129,56 +153,14 @@ describe("ChatMessages", () => {
           author_name: null,
         },
       ],
-      loading: false,
-      error: undefined,
-    });
+        { isLoading: false, isReady: true },
+      ),
+    );
 
     render(() => <ChatMessages channelId="channel-1" />);
 
-    expect(screen.getByText("Unknown")).toBeInTheDocument();
-    expect(screen.getByText("?")).toBeInTheDocument(); // Avatar fallback
-  });
-
-  it("queries messages with correct channel ID", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-
-    render(() => <ChatMessages channelId="test-channel-123" />);
-
-    expect(useWatchedQuery).toHaveBeenCalled();
-    const call = vi.mocked(useWatchedQuery).mock.calls[0];
-
-    // Check that the query parameters function returns the correct channel ID
-    const paramsFunction = call[1];
-    expect(paramsFunction?.()).toEqual(["test-channel-123"]);
-  });
-
-  it("orders messages by created_at and id", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-
-    render(() => <ChatMessages channelId="channel-1" />);
-
-    // Verify the SQL query includes ORDER BY clause
-    const call = vi.mocked(useWatchedQuery).mock.calls[0];
-    const sqlFunction = call[0];
-    const sql = sqlFunction();
-
-    expect(sql).toContain("ORDER BY m.created_at ASC, m.id ASC");
-  });
-
-  it("includes author name resolution in query", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-
-    render(() => <ChatMessages channelId="channel-1" />);
-
-    // Verify the SQL query includes CASE statement for author name resolution
-    const call = vi.mocked(useWatchedQuery).mock.calls[0];
-    const sqlFunction = call[0];
-    const sql = sqlFunction();
-
-    expect(sql).toContain("CASE");
-    expect(sql).toContain("WHEN m.author_type = 'user'");
-    expect(sql).toContain("WHEN m.author_type = 'agent'");
-    expect(sql).toContain("WHEN m.author_type = 'system'");
+    expect(screen.getByText("user-unknown")).toBeInTheDocument();
+    expect(screen.getByText("U")).toBeInTheDocument();
   });
 
   it("renders markdown content", () => {

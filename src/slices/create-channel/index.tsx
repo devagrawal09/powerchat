@@ -1,7 +1,11 @@
 import { createSignal } from "solid-js";
 import { useNavigate } from "@solidjs/router";
-import { writeTransaction } from "~/lib/powersync";
 import { getUsername } from "~/lib/getUsername";
+import {
+  channelMembersCollection,
+  channelsCollection,
+  ensureTanStackDbReady,
+} from "~/lib/tanstack-db";
 
 export function CreateChannel() {
   const navigate = useNavigate();
@@ -19,6 +23,7 @@ export function CreateChannel() {
     try {
       const channelId = crypto.randomUUID();
       const username = getUsername();
+      const now = new Date().toISOString();
 
       if (!username) {
         console.error("No username found");
@@ -26,29 +31,36 @@ export function CreateChannel() {
         return;
       }
 
-      await writeTransaction(async (tx) => {
-        // Insert channel
-        await tx.execute(
-          `INSERT INTO channels (id, name, created_by, created_at) VALUES (?, ?, ?, datetime('now'))`,
-          [channelId, name, username]
-        );
+      await ensureTanStackDbReady();
 
-        // Add user as member
-        await tx.execute(
-          `INSERT INTO channel_members (id, channel_id, member_type, member_id, joined_at) VALUES (?, ?, 'user', ?, datetime('now'))`,
-          [crypto.randomUUID(), channelId, username]
-        );
+      await channelsCollection
+        .insert({
+          id: channelId,
+          name,
+          created_by: username,
+          created_at: now,
+        })
+        .isPersisted.promise;
 
-        // Auto-add assistant agent
-        await tx.execute(
-          `INSERT INTO channel_members (id, channel_id, member_type, member_id, joined_at) VALUES (?, ?, 'agent', ?, datetime('now'))`,
-          [
-            crypto.randomUUID(),
-            channelId,
-            "00000000-0000-0000-0000-000000000001",
-          ]
-        );
-      });
+      await channelMembersCollection
+        .insert({
+          id: crypto.randomUUID(),
+          channel_id: channelId,
+          member_type: "user",
+          member_id: username,
+          joined_at: now,
+        })
+        .isPersisted.promise;
+
+      await channelMembersCollection
+        .insert({
+          id: crypto.randomUUID(),
+          channel_id: channelId,
+          member_type: "agent",
+          member_id: "00000000-0000-0000-0000-000000000001",
+          joined_at: now,
+        })
+        .isPersisted.promise;
 
       form.reset();
       navigate(`/channel/${channelId}`);

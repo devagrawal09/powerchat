@@ -1,6 +1,6 @@
 import { createSignal, Show } from "solid-js";
-import { writeTransaction } from "~/lib/powersync";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { useLiveQuery } from "@tanstack/solid-db";
+import { agentsCollection, ensureTanStackDbReady } from "~/lib/tanstack-db";
 
 type CreateAgentProps = {
   channelId: string;
@@ -24,9 +24,10 @@ export function CreateAgent(props: CreateAgentProps) {
   } | null>(null);
 
   // Query existing agents to check for duplicates
-  const existingAgents = useWatchedQuery<AgentRow>(
-    () => `SELECT id, name FROM agents`,
-    () => []
+  const existingAgents = useLiveQuery((q) =>
+    q
+      .from({ agent: agentsCollection })
+      .select(({ agent }) => ({ id: agent.id, name: agent.name })),
   );
 
   const handleSubmit = async (e: Event) => {
@@ -58,8 +59,8 @@ export function CreateAgent(props: CreateAgentProps) {
     }
 
     // Check for duplicate agent name
-    const duplicate = (existingAgents.data || []).find(
-      (a) => a.name.toLowerCase() === trimmedName.toLowerCase()
+    const duplicate = existingAgents().find(
+      (a) => a.name?.toLowerCase() === trimmedName.toLowerCase(),
     );
     if (duplicate) {
       setMessage({ type: "error", text: "Agent name already taken" });
@@ -73,20 +74,15 @@ export function CreateAgent(props: CreateAgentProps) {
       const agentId = crypto.randomUUID();
       const now = new Date().toISOString();
 
-      await writeTransaction(async (tx) => {
-        await tx.execute(
-          `INSERT INTO agents (id, name, system_instructions, description, model_config, created_at)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [
-            agentId,
-            trimmedName,
-            trimmedSystemInstructions,
-            trimmedDescription,
-            JSON.stringify({}),
-            now,
-          ]
-        );
-      });
+      await ensureTanStackDbReady();
+      await agentsCollection.insert({
+        id: agentId,
+        name: trimmedName,
+        system_instructions: trimmedSystemInstructions,
+        description: trimmedDescription,
+        model_config: JSON.stringify({}),
+        created_at: now,
+      }).isPersisted.promise;
 
       setMessage({ type: "success", text: `Agent "${trimmedName}" created!` });
       setName("");

@@ -1,5 +1,6 @@
 import { For, Show } from "solid-js";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { eq, useLiveQuery } from "@tanstack/solid-db";
+import { documentsCollection } from "~/lib/tanstack-db";
 
 type DocumentRow = {
   id: string;
@@ -13,14 +14,16 @@ type ChannelDocumentsListProps = {
 };
 
 export function ChannelDocumentsList(props: ChannelDocumentsListProps) {
-  // Documents in channel
-  const documents = useWatchedQuery<DocumentRow>(
-    () =>
-      `SELECT id, title, description 
-       FROM documents 
-       WHERE channel_id = ? 
-       ORDER BY created_at DESC`,
-    () => [props.channelId]
+  const documents = useLiveQuery((q) =>
+    q
+      .from({ document: documentsCollection })
+      .where(({ document }) => eq(document.channel_id, props.channelId))
+      .orderBy(({ document }) => document.created_at, "desc")
+      .select(({ document }) => ({
+        id: document.id,
+        title: document.title,
+        description: document.description,
+      })),
   );
 
   return (
@@ -28,8 +31,8 @@ export function ChannelDocumentsList(props: ChannelDocumentsListProps) {
       <div class="text-xs font-semibold text-gray-500 uppercase mt-4 mb-2">
         Documents
       </div>
-      <Show when={!documents.loading}>
-        <For each={documents.data}>
+      <Show when={!documents.isLoading && documents.isReady}>
+        <For each={documents()}>
           {(doc) => (
             <div
               onClick={() => props.onDocumentClick(doc.id)}

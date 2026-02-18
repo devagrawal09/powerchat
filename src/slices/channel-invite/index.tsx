@@ -1,7 +1,12 @@
 import { createSignal, Show, For, createMemo } from "solid-js";
-import { writeTransaction } from "~/lib/powersync";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { and, eq, useLiveQuery } from "@tanstack/solid-db";
 import { getUsername } from "~/lib/getUsername";
+import {
+  agentsCollection,
+  channelMembersCollection,
+  ensureTanStackDbReady,
+  usersCollection,
+} from "~/lib/tanstack-db";
 
 type ChannelInviteProps = {
   channelId: string;
@@ -34,36 +39,46 @@ export function ChannelInvite(props: ChannelInviteProps) {
   } | null>(null);
 
   // Get all available agents
-  const allAgents = useWatchedQuery<AgentRow>(
-    () => `SELECT id, name, description FROM agents ORDER BY name`,
-    () => []
+  const allAgents = useLiveQuery((q) =>
+    q
+      .from({ agent: agentsCollection })
+      .orderBy(({ agent }) => agent.name)
+      .select(({ agent }) => ({
+        id: agent.id,
+        name: agent.name,
+        description: agent.description,
+      })),
   );
 
   // Get agents already in channel
-  const channelAgents = useWatchedQuery<MemberRow>(
-    () =>
-      `SELECT member_id FROM channel_members WHERE channel_id = ? AND member_type = 'agent'`,
-    () => [props.channelId]
+  const channelAgents = useLiveQuery((q) =>
+    q
+      .from({ member: channelMembersCollection })
+      .where(({ member }) =>
+        and(eq(member.channel_id, props.channelId), eq(member.member_type, "agent")),
+      )
+      .select(({ member }) => ({ member_id: member.member_id })),
   );
 
   // Get all users for validation
-  const allUsers = useWatchedQuery<UserRow>(
-    () => `SELECT id FROM users`,
-    () => []
+  const allUsers = useLiveQuery((q) =>
+    q.from({ user: usersCollection }).select(({ user }) => ({ id: user.id })),
   );
 
   // Get current channel members to check for duplicates
-  const channelMembers = useWatchedQuery<MemberRow>(
-    () => `SELECT member_id FROM channel_members WHERE channel_id = ?`,
-    () => [props.channelId]
+  const channelMembers = useLiveQuery((q) =>
+    q
+      .from({ member: channelMembersCollection })
+      .where(({ member }) => eq(member.channel_id, props.channelId))
+      .select(({ member }) => ({ member_id: member.member_id })),
   );
 
   // Filter out agents already in channel
   const availableAgents = createMemo(() => {
     const inChannel = new Set(
-      channelAgents.data?.map((a) => a.member_id) || []
+      channelAgents().map((a) => a.member_id) || []
     );
-    return (allAgents.data || []).filter((a) => !inChannel.has(a.id));
+    return allAgents().filter((a) => !inChannel.has(a.id));
   });
 
   const handleInviteUser = async (e: Event) => {
@@ -77,7 +92,7 @@ export function ChannelInvite(props: ChannelInviteProps) {
     }
 
     // Verify current user is a member of the channel
-    const currentUserIsMember = (channelMembers.data || []).find(
+    const currentUserIsMember = channelMembers().find(
       (m) => m.member_id === currentUser
     );
     if (!currentUserIsMember) {
@@ -89,14 +104,14 @@ export function ChannelInvite(props: ChannelInviteProps) {
     }
 
     // Check if user exists
-    const userExists = (allUsers.data || []).find((u) => u.id === value);
+    const userExists = allUsers().find((u) => u.id === value);
     if (!userExists) {
       setMessage({ type: "error", text: "User not found" });
       return;
     }
 
     // Check if user is already a member
-    const isMember = (channelMembers.data || []).find(
+    const isMember = channelMembers().find(
       (m) => m.member_id === value
     );
     if (isMember) {
@@ -111,13 +126,16 @@ export function ChannelInvite(props: ChannelInviteProps) {
       const memberId = crypto.randomUUID();
       const now = new Date().toISOString();
 
-      await writeTransaction(async (tx) => {
-        await tx.execute(
-          `INSERT INTO channel_members (id, channel_id, member_type, member_id, joined_at)
-           VALUES (?, ?, 'user', ?, ?)`,
-          [memberId, props.channelId, value, now]
-        );
-      });
+      await ensureTanStackDbReady();
+      await channelMembersCollection
+        .insert({
+          id: memberId,
+          channel_id: props.channelId,
+          member_type: "user",
+          member_id: value,
+          joined_at: now,
+        })
+        .isPersisted.promise;
 
       setMessage({ type: "success", text: `${value} added to channel!` });
       setUsername("");
@@ -142,7 +160,7 @@ export function ChannelInvite(props: ChannelInviteProps) {
     }
 
     // Verify current user is a member of the channel
-    const currentUserIsMember = (channelMembers.data || []).find(
+    const currentUserIsMember = channelMembers().find(
       (m) => m.member_id === currentUser
     );
     if (!currentUserIsMember) {
@@ -154,14 +172,14 @@ export function ChannelInvite(props: ChannelInviteProps) {
     }
 
     // Check if agent exists
-    const agentExists = (allAgents.data || []).find((a) => a.id === agentId);
+    const agentExists = allAgents().find((a) => a.id === agentId);
     if (!agentExists) {
       setMessage({ type: "error", text: "Agent not found" });
       return;
     }
 
     // Check if agent is already a member
-    const isMember = (channelMembers.data || []).find(
+    const isMember = channelMembers().find(
       (m) => m.member_id === agentId
     );
     if (isMember) {
@@ -176,13 +194,16 @@ export function ChannelInvite(props: ChannelInviteProps) {
       const memberId = crypto.randomUUID();
       const now = new Date().toISOString();
 
-      await writeTransaction(async (tx) => {
-        await tx.execute(
-          `INSERT INTO channel_members (id, channel_id, member_type, member_id, joined_at)
-           VALUES (?, ?, 'agent', ?, ?)`,
-          [memberId, props.channelId, agentId, now]
-        );
-      });
+      await ensureTanStackDbReady();
+      await channelMembersCollection
+        .insert({
+          id: memberId,
+          channel_id: props.channelId,
+          member_type: "agent",
+          member_id: agentId,
+          joined_at: now,
+        })
+        .isPersisted.promise;
 
       const agentName =
         availableAgents().find((a) => a.id === agentId)?.name || "Agent";
@@ -262,7 +283,7 @@ export function ChannelInvite(props: ChannelInviteProps) {
       <Show when={inviteType() === "agent"}>
         <div class="space-y-2">
           <Show
-            when={!allAgents.loading}
+            when={!allAgents.isLoading && allAgents.isReady}
             fallback={
               <div class="text-xs text-gray-500">Loading agents...</div>
             }

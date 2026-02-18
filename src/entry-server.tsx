@@ -2,9 +2,9 @@
 import { createHandler, StartServer } from "@solidjs/start/server";
 import { startMessageSubscription } from "./server/message-subscription";
 
-startMessageSubscription().catch((error) => {
-  console.error("[subscription] failed to start", error);
-});
+// startMessageSubscription().catch((error) => {
+//   console.error("[subscription] failed to start", error);
+// });
 
 export default createHandler(() => (
   <StartServer

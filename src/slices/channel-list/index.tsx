@@ -1,8 +1,9 @@
 import { For, Show, createMemo } from "solid-js";
 import { A } from "@solidjs/router";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { and, eq, useLiveQuery } from "@tanstack/solid-db";
 import { DeleteChannel } from "~/slices/delete-channel";
 import { getUsername } from "~/lib/getUsername";
+import { channelMembersCollection, channelsCollection } from "~/lib/tanstack-db";
 
 type ChannelRow = {
   id: string;
@@ -11,16 +12,25 @@ type ChannelRow = {
   created_at: string;
 };
 
-export function ChannelList() {
-  const username = createMemo(() => getUsername());
+export function ChannelList(props: { username?: string | null }) {
+  const username = createMemo(() => props.username ?? getUsername());
 
-  const channels = useWatchedQuery<ChannelRow>(
-    () =>
-      `SELECT c.* FROM channels c
-       JOIN channel_members cm ON cm.channel_id = c.id
-       WHERE cm.member_type = 'user' AND cm.member_id = ?
-       ORDER BY c.created_at DESC`,
-    () => [username() || ""]
+  const channels = useLiveQuery((q) =>
+    q
+      .from({ channel: channelsCollection })
+      .innerJoin({ member: channelMembersCollection }, ({ channel, member }) =>
+        eq(member.channel_id, channel.id),
+      )
+      .where(({ member }) =>
+        and(eq(member.member_type, "user"), eq(member.member_id, username() || "")),
+      )
+      .orderBy(({ channel }) => channel.created_at, "desc")
+      .select(({ channel }) => ({
+        id: channel.id,
+        name: channel.name,
+        created_by: channel.created_by,
+        created_at: channel.created_at,
+      })),
   );
 
   return (
@@ -29,10 +39,10 @@ export function ChannelList() {
         Channels
       </div>
       <Show
-        when={!channels.loading}
+        when={!channels.isLoading && channels.isReady}
         fallback={<div class="px-2 text-sm text-gray-500">Loading...</div>}
       >
-        <For each={channels.data}>
+        <For each={channels()}>
           {(channel) => (
             <div class="flex items-center group">
               <A

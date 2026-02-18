@@ -1,5 +1,11 @@
 import { createMemo, For, Show } from "solid-js";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
+import { and, coalesce, eq, useLiveQuery } from "@tanstack/solid-db";
+import {
+  agentsCollection,
+  channelMembersCollection,
+  documentsCollection,
+  usersCollection,
+} from "~/lib/tanstack-db";
 
 type MemberRow = {
   member_type: "user" | "agent";
@@ -24,29 +30,50 @@ type MentionAutocompleteProps = {
 };
 
 export function MentionAutocomplete(props: MentionAutocompleteProps) {
-  const members = useWatchedQuery<MemberRow>(
-    () =>
-      `SELECT cm.member_type, cm.member_id,
-              CASE 
-                WHEN cm.member_type = 'user' THEN COALESCE(u.id, cm.member_id)
-                WHEN cm.member_type = 'agent' THEN COALESCE(a.name, 'Agent')
-                ELSE cm.member_id
-              END AS name
-       FROM channel_members cm
-       LEFT JOIN users u ON cm.member_type = 'user' AND u.id = cm.member_id
-       LEFT JOIN agents a ON cm.member_type = 'agent' AND a.id = cm.member_id
-       WHERE cm.channel_id = ?
-       ORDER BY cm.member_type, name`,
-    () => [props.channelId]
+  const membersInChannel = useLiveQuery((q) =>
+    q
+      .from({ member: channelMembersCollection })
+      .leftJoin({ user: usersCollection }, ({ member, user }) =>
+        eq(user.id, member.member_id),
+      )
+      .leftJoin({ agent: agentsCollection }, ({ member, agent }) =>
+        eq(agent.id, member.member_id),
+      )
+      .where(({ member }) => eq(member.channel_id, props.channelId))
+      .orderBy(({ member }) => member.member_type)
+      .orderBy(({ member, user, agent }) =>
+        coalesce(user.id, agent.name, member.member_id),
+      )
+      .select(({ member, user, agent }) => ({
+        member_type: member.member_type,
+        member_id: member.member_id,
+        user_name: user.id,
+        agent_name: agent.name,
+      })),
   );
 
-  const documents = useWatchedQuery<DocumentRow>(
-    () =>
-      `SELECT id, title, description 
-       FROM documents 
-       WHERE channel_id = ? 
-       ORDER BY created_at DESC`,
-    () => [props.channelId]
+  const members = createMemo<MemberRow[]>(() =>
+    membersInChannel()
+      .map((member) => ({
+        member_type: member.member_type,
+        member_id: member.member_id,
+        name:
+          member.member_type === "user"
+            ? (member.user_name ?? member.member_id)
+            : (member.agent_name ?? "Agent"),
+      })),
+  );
+
+  const documents = useLiveQuery((q) =>
+    q
+      .from({ document: documentsCollection })
+      .where(({ document }) => eq(document.channel_id, props.channelId))
+      .orderBy(({ document }) => document.created_at, "desc")
+      .select(({ document }) => ({
+        id: document.id,
+        title: document.title,
+        description: document.description,
+      })),
   );
 
   // Fuzzy search utility
@@ -67,11 +94,11 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
 
   // Filtered mention options
   const mentionOptions = createMemo(() => {
-    const q = props.mentionQuery.toLowerCase();
+    const q = (props.mentionQuery || "").toLowerCase();
 
     if (props.mentionType === "#") {
       // Document mentions
-      const list = (documents.data || []).map((d) => ({
+      const list = documents().map((d) => ({
         type: "document" as const,
         id: d.id,
         name: d.title,
@@ -79,7 +106,7 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
       return list.filter((o) => fuzzyMatch(o.name, q));
     } else {
       // Member mentions
-      const list = (members.data || [])
+      const list = members()
         .filter((m) => m.name)
         .map((m) => ({
           type: m.member_type,

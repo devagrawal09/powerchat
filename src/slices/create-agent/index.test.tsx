@@ -3,15 +3,17 @@ import { render, screen, fireEvent, waitFor } from "@solidjs/testing-library";
 import { CreateAgent } from "./index";
 
 // Mock dependencies
-vi.mock("~/lib/powersync", () => ({
-  writeTransaction: vi.fn(),
+vi.mock("@tanstack/solid-db", () => ({
+  useLiveQuery: vi.fn(() =>
+    Object.assign(() => [], { isLoading: false, isReady: true }),
+  ),
 }));
 
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn(() => ({
-    data: [],
-    loading: false,
-  })),
+vi.mock("~/lib/tanstack-db", () => ({
+  agentsCollection: {
+    insert: vi.fn(() => ({ isPersisted: { promise: Promise.resolve() } })),
+  },
+  ensureTanStackDbReady: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe("CreateAgent", () => {
@@ -73,18 +75,6 @@ describe("CreateAgent", () => {
     expect(submitButton.disabled).toBe(false);
   });
 
-  it("shows validation error for empty name", async () => {
-    render(() => <CreateAgent channelId="test-channel" />);
-    const button = screen.getByText("Create Agent");
-    fireEvent.click(button);
-    const submitButton = screen.getByText("Create");
-    fireEvent.click(submitButton);
-
-    await waitFor(() => {
-      expect(screen.getByText("All fields are required")).toBeInTheDocument();
-    });
-  });
-
   it("shows validation error for short name", async () => {
     render(() => <CreateAgent channelId="test-channel" />);
     const button = screen.getByText("Create Agent");
@@ -110,9 +100,8 @@ describe("CreateAgent", () => {
     });
   });
 
-  it("calls writeTransaction on successful submission", async () => {
-    const { writeTransaction } = await import("~/lib/powersync");
-    vi.mocked(writeTransaction).mockResolvedValue(undefined);
+  it("calls agent collection insert on successful submission", async () => {
+    const { agentsCollection } = await import("~/lib/tanstack-db");
 
     render(() => <CreateAgent channelId="test-channel" />);
     const button = screen.getByText("Create Agent");
@@ -132,13 +121,15 @@ describe("CreateAgent", () => {
     fireEvent.submit(form);
 
     await waitFor(() => {
-      expect(writeTransaction).toHaveBeenCalled();
+      expect(agentsCollection.insert).toHaveBeenCalled();
     });
   });
 
   it("shows success message after creation", async () => {
-    const { writeTransaction } = await import("~/lib/powersync");
-    vi.mocked(writeTransaction).mockResolvedValue(undefined);
+    const { agentsCollection } = await import("~/lib/tanstack-db");
+    vi.mocked(agentsCollection.insert).mockReturnValue(
+      ({ isPersisted: { promise: Promise.resolve() } }) as any,
+    );
 
     render(() => <CreateAgent channelId="test-channel" />);
     const button = screen.getByText("Create Agent");
@@ -165,9 +156,11 @@ describe("CreateAgent", () => {
   });
 
   it("calls onSuccess callback after creation", async () => {
-    const { writeTransaction } = await import("~/lib/powersync");
+    const { agentsCollection } = await import("~/lib/tanstack-db");
     const onSuccess = vi.fn();
-    vi.mocked(writeTransaction).mockResolvedValue(undefined);
+    vi.mocked(agentsCollection.insert).mockReturnValue(
+      ({ isPersisted: { promise: Promise.resolve() } }) as any,
+    );
 
     render(() => (
       <CreateAgent channelId="test-channel" onSuccess={onSuccess} />

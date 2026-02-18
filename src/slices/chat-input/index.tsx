@@ -1,8 +1,15 @@
 import { createSignal, createMemo } from "solid-js";
-import { writeTransaction } from "~/lib/powersync";
+import { and, coalesce, eq, useLiveQuery } from "@tanstack/solid-db";
 import { getUsername } from "~/lib/getUsername";
-import { useWatchedQuery } from "~/lib/useWatchedQuery";
 import { MentionAutocomplete } from "~/slices/mention-autocomplete";
+import {
+  agentsCollection,
+  channelMembersCollection,
+  documentsCollection,
+  ensureTanStackDbReady,
+  messagesCollection,
+  usersCollection,
+} from "~/lib/tanstack-db";
 
 type MemberRow = {
   member_type: "user" | "agent";
@@ -64,33 +71,60 @@ export function ChatInput(props: ChatInputProps) {
     return memberState; // default to member state for type
   });
 
+  const mentionQuery = createMemo(() => activeMentionState()?.query ?? "");
+  const mentionType = createMemo<"@" | "#">(
+    () => activeMentionState()?.type ?? "@",
+  );
+  const mentionIsOpen = createMemo(() => activeMentionState()?.isOpen ?? false);
+
   // Query members for agent mention detection and resolution
   // Note: This query is needed for the mutation logic (resolving agent IDs from mentions)
   // The autocomplete UI is handled by the separate MentionAutocomplete slice
-  const members = useWatchedQuery<MemberRow>(
-    () =>
-      `SELECT cm.member_type, cm.member_id,
-              CASE
-                WHEN cm.member_type = 'user' THEN COALESCE(u.id, cm.member_id)
-                WHEN cm.member_type = 'agent' THEN COALESCE(a.name, 'Agent')
-                ELSE cm.member_id
-              END AS name
-       FROM channel_members cm
-       LEFT JOIN users u ON cm.member_type = 'user' AND u.id = cm.member_id
-       LEFT JOIN agents a ON cm.member_type = 'agent' AND a.id = cm.member_id
-       WHERE cm.channel_id = ?
-       ORDER BY cm.member_type, name`,
-    () => [props.channelId],
+  const membersInChannel = useLiveQuery((q) =>
+    q
+      .from({ member: channelMembersCollection })
+      .leftJoin({ user: usersCollection }, ({ member, user }) =>
+        eq(user.id, member.member_id),
+      )
+      .leftJoin({ agent: agentsCollection }, ({ member, agent }) =>
+        eq(agent.id, member.member_id),
+      )
+      .where(({ member }) => eq(member.channel_id, props.channelId))
+      .orderBy(({ member }) => member.member_type)
+      .orderBy(({ member, user, agent }) =>
+        coalesce(user.id, agent.name, member.member_id),
+      )
+      .select(({ member, user, agent }) => ({
+        member_type: member.member_type,
+        member_id: member.member_id,
+        user_name: user.id,
+        agent_name: agent.name,
+      })),
+  );
+
+  const members = createMemo<MemberRow[]>(() =>
+    membersInChannel()
+      .map((member) => ({
+        member_type: member.member_type,
+        member_id: member.member_id,
+        name:
+          member.member_type === "user"
+            ? (member.user_name ?? member.member_id)
+            : (member.agent_name ?? "Agent"),
+      })),
   );
 
   // Query documents for document mention autocomplete
-  const documents = useWatchedQuery<DocumentRow>(
-    () =>
-      `SELECT id, title, description
-       FROM documents
-       WHERE channel_id = ?
-       ORDER BY created_at DESC`,
-    () => [props.channelId],
+  const documents = useLiveQuery((q) =>
+    q
+      .from({ document: documentsCollection })
+      .where(({ document }) => eq(document.channel_id, props.channelId))
+      .orderBy(({ document }) => document.created_at, "desc")
+      .select(({ document }) => ({
+        id: document.id,
+        title: document.title,
+        description: document.description,
+      })),
   );
 
   // Fuzzy search utility (same as MentionAutocomplete)
@@ -114,7 +148,7 @@ export function ChatInput(props: ChatInputProps) {
     const state = mentionState();
     if (!state.isOpen) return [];
     const q = state.query.toLowerCase();
-    const list = (members.data || [])
+    const list = members()
       .filter((m) => m.name)
       .map((m) => ({
         type: m.member_type,
@@ -129,7 +163,7 @@ export function ChatInput(props: ChatInputProps) {
     const state = documentMentionState();
     if (!state.isOpen) return [];
     const q = state.query.toLowerCase();
-    const list = (documents.data || []).map((d) => ({
+    const list = documents().map((d) => ({
       type: "document" as const,
       id: d.id,
       name: d.title,
@@ -139,7 +173,7 @@ export function ChatInput(props: ChatInputProps) {
 
   const handleMentionSelect = (name: string) => {
     const state = activeMentionState();
-    if (state.isOpen) {
+    if (state?.isOpen) {
       const before = content().slice(0, state.cursorPosition);
       const after = content().slice(
         state.cursorPosition + state.query.length + 1,
@@ -165,38 +199,17 @@ export function ChatInput(props: ChatInputProps) {
         return;
       }
 
-      console.log("before writeTransaction", {
-        username,
-        messageId,
-        text,
-      });
-
-      // Insert user message
-      const t = writeTransaction(async (tx) => {
-        console.log("before execute", {
-          tx,
-          messageId,
-          channelId: props.channelId,
-          username,
-          text,
-          userMessageCreatedAt,
-        });
-        const result = tx.execute(
-          `INSERT INTO messages (id, channel_id, author_type, author_id, content, created_at)
-           VALUES (?, ?, 'user', ?, ?, ?)`,
-          [messageId, props.channelId, username, text, userMessageCreatedAt],
-        );
-        console.log("after execute sync");
-
-        await result;
-        console.log("after execute async");
-        return result;
-      });
-
-      console.log("after writeTransaction sync");
-      await t;
-
-      console.log("after writeTransaction async");
+      await ensureTanStackDbReady();
+      await messagesCollection
+        .insert({
+          id: messageId,
+          channel_id: props.channelId,
+          author_type: "user",
+          author_id: username,
+          content: text,
+          created_at: userMessageCreatedAt,
+        })
+        .isPersisted.promise;
 
     } catch (error: unknown) {
       console.error("[send] error", error);
@@ -214,7 +227,7 @@ export function ChatInput(props: ChatInputProps) {
             onInput={(e) => setContent(e.currentTarget.value)}
             onKeyDown={(e) => {
               const state = activeMentionState();
-              if (state.isOpen) {
+              if (state?.isOpen) {
                 const options =
                   state.type === "#"
                     ? documentMentionOptions()
@@ -237,7 +250,7 @@ export function ChatInput(props: ChatInputProps) {
                   e.preventDefault();
                   const before = content().slice(0, state.cursorPosition);
                   const after = content().slice(
-                    state.cursorPosition + state.query.length + 1,
+                    state.cursorPosition + (state.query?.length ?? 0) + 1,
                   );
                   setContent(before + after);
                   setActiveMentionIndex(0);
@@ -252,9 +265,9 @@ export function ChatInput(props: ChatInputProps) {
           />
           <MentionAutocomplete
             channelId={props.channelId}
-            mentionQuery={activeMentionState().query}
-            mentionType={activeMentionState().type}
-            isOpen={activeMentionState().isOpen}
+            mentionQuery={mentionQuery()}
+            mentionType={mentionType()}
+            isOpen={mentionIsOpen()}
             activeIndex={activeMentionIndex()}
             onSelect={handleMentionSelect}
             onActiveIndexChange={setActiveMentionIndex}

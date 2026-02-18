@@ -2,18 +2,25 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@solidjs/testing-library";
 import { ChannelHeader } from "./index";
 
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn(() => ({
-    data: [
-      {
-        id: "test-channel",
-        name: "general",
-        created_by: "user1",
-        created_at: "2024-01-01",
-      },
-    ],
-    loading: false,
-  })),
+vi.mock("@tanstack/solid-db", () => ({
+  useLiveQuery: vi.fn(() =>
+    Object.assign(
+      () => [
+        {
+          id: "test-channel",
+          name: "general",
+          created_by: "user1",
+          created_at: "2024-01-01",
+        },
+      ],
+      { isLoading: false, isReady: true },
+    ),
+  ),
+  eq: vi.fn(),
+}));
+
+vi.mock("~/lib/tanstack-db", () => ({
+  channelsCollection: {},
 }));
 
 describe("ChannelHeader", () => {
@@ -27,11 +34,10 @@ describe("ChannelHeader", () => {
   });
 
   it("shows loading state", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    vi.mocked(useWatchedQuery).mockReturnValueOnce({
-      data: [],
-      loading: true,
-    });
+    const { useLiveQuery } = await import("@tanstack/solid-db");
+    vi.mocked(useLiveQuery).mockReturnValueOnce(
+      Object.assign(() => [], { isLoading: true, isReady: false }),
+    );
 
     render(() => <ChannelHeader channelId="test-channel" />);
     expect(screen.getByText("Loading...")).toBeInTheDocument();

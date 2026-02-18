@@ -3,22 +3,30 @@ import { render, screen, fireEvent } from "@solidjs/testing-library";
 import { ChannelAgentsList } from "./index";
 
 // Mock dependencies
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn(() => ({
-    data: [
-      {
-        member_type: "agent",
-        member_id: "agent-1",
-        name: "Assistant",
-      },
-      {
-        member_type: "agent",
-        member_id: "agent-2",
-        name: "Researcher",
-      },
-    ],
-    loading: false,
-  })),
+vi.mock("@tanstack/solid-db", () => ({
+  useLiveQuery: vi.fn(() =>
+    Object.assign(
+      () => [
+        {
+          member_id: "agent-1",
+          agent_name: "Assistant",
+        },
+        {
+          member_id: "agent-2",
+          agent_name: "Researcher",
+        },
+      ],
+      { isLoading: false, isReady: true },
+    ),
+  ),
+  and: vi.fn(),
+  coalesce: vi.fn(),
+  eq: vi.fn(),
+}));
+
+vi.mock("~/lib/tanstack-db", () => ({
+  agentsCollection: {},
+  channelMembersCollection: {},
 }));
 
 describe("ChannelAgentsList", () => {
@@ -54,11 +62,10 @@ describe("ChannelAgentsList", () => {
   });
 
   it("handles empty agent list", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    vi.mocked(useWatchedQuery).mockReturnValueOnce({
-      data: [],
-      loading: false,
-    });
+    const { useLiveQuery } = await import("@tanstack/solid-db");
+    vi.mocked(useLiveQuery).mockReturnValueOnce(
+      Object.assign(() => [], { isLoading: false, isReady: true }),
+    );
 
     const onAgentClick = vi.fn();
     render(() => (
@@ -69,11 +76,10 @@ describe("ChannelAgentsList", () => {
   });
 
   it("hides content while loading", async () => {
-    const { useWatchedQuery } = await import("~/lib/useWatchedQuery");
-    vi.mocked(useWatchedQuery).mockReturnValueOnce({
-      data: [],
-      loading: true,
-    });
+    const { useLiveQuery } = await import("@tanstack/solid-db");
+    vi.mocked(useLiveQuery).mockReturnValueOnce(
+      Object.assign(() => [], { isLoading: true, isReady: false }),
+    );
 
     const onAgentClick = vi.fn();
     render(() => (
