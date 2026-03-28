@@ -16,10 +16,14 @@ class PowerChatConnector implements PowerSyncBackendConnector {
   async fetchCredentials() {
     console.log("[fetchCredentials] start");
     // Call server function directly - no HTTP overhead!
-    const { token, expiresAt } = await getPowerSyncToken();
+    // const { token, expiresAt } = await getPowerSyncToken();
     const endpoint = import.meta.env.VITE_POWERSYNC_SERVICE_URL;
-    console.log({ endpoint, token, expiresAt });
-    return { endpoint, token, expiresAt: new Date(expiresAt) };
+    const token = `eyJhbGciOiJSUzI1NiIsImtpZCI6InBvd2Vyc3luYy1kZXYtMzIyM2Q0ZTMifQ.eyJzdWIiOiIxMjMiLCJpYXQiOjE3NzQ2ODQzMTAsImlzcyI6Imh0dHBzOi8vcG93ZXJzeW5jLWFwaS5qb3VybmV5YXBwcy5jb20iLCJhdWQiOiJodHRwczovLzY5YzcyZDM0YjViOTAyZDQ2OWIzNjRjMC5wb3dlcnN5bmMuam91cm5leWFwcHMuY29tIiwiZXhwIjoxNzc0NzI3NTEwfQ.E_1VH-NX1TxK_9dfaNe2hJ4AYCbW3M7tNPKEhx70ky2Axea91b20Lpefhcz5qeAlc5I3a8697KUREobaWXZCAbzsSgx4BQPH0vEGkJ3QyqAC7VYuOheIRFpVxh-RtcnvXeS2fF0UleZhH7gflxq99gaGSxenNcaje2ocZDIIIBiKLyMBDfgx-FD66ra4tvTmoznXN3Qu4onwEYLnDCFrrrU_FRBs8ujQts0p_HTbalFkF8P78hQP1A6Brk7FwHNs82xi41M-Ph1Tf_2p4dDazHoWAEIGroC6HNvN2WQ78GNWV1WwBkkjjriyY8c3oq7I5FZK-5cdflYXh8XbRzLcHg`;
+    console.log({ endpoint, token });
+    return {
+      endpoint,
+      token,
+    };
   }
 
   async uploadData(database: AbstractPowerSyncDatabase): Promise<void> {

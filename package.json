@@ -14,9 +14,9 @@
   "dependencies": {
     "@mastra/core": "^1.13.2",
     "@mastra/mcp": "^1.2.1",
-    "@powersync/common": "^1.40.0",
+    "@powersync/common": "^1.50.0",
     "@powersync/node": "^0.16.0",
-    "@powersync/web": "^1.27.1",
+    "@powersync/web": "^1.37.0",
     "@solidjs/router": "^0.15.0",
     "@solidjs/start": "^1.1.0",
     "@types/pg": "^8.15.6",

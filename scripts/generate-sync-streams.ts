@@ -1,5 +1,8 @@
-import { createHash } from "node:crypto";
 import * as db from "../src/db";
+import {
+  getSyncStreamNameForSql,
+  normalizeSyncStreamSql,
+} from "../src/lib/sync-streams";
 
 const syncConfigPath = new URL("../powersync/sync-config.yaml", import.meta.url);
 
@@ -15,30 +18,12 @@ function indentBlock(value: string, spaces: number) {
     .join("\n");
 }
 
-function normalizeSql(sql: string) {
-  const lines = sql
-    .split("\n")
-    .filter((line, index, allLines) => {
-      if (line.trim().length > 0) {
-        return true;
-      }
-
-      return index !== 0 && index !== allLines.length - 1;
-    });
-  const indents = lines
-    .filter((line) => line.trim().length > 0)
-    .map((line) => line.match(/^\s*/)?.[0].length ?? 0);
-  const minIndent = indents.length > 0 ? Math.min(...indents) : 0;
-
-  return lines.map((line) => line.slice(minIndent)).join("\n");
-}
-
 function formatStream(name: string, sql: string, autoSubscribe = true) {
   return [
     `  ${name}:`,
     `    auto_subscribe: ${autoSubscribe ? "true" : "false"}`,
     "    query: |",
-    indentBlock(normalizeSql(sql), 6),
+    indentBlock(normalizeSyncStreamSql(sql), 6),
   ].join("\n");
 }
 
@@ -56,20 +41,15 @@ function isSyncStreamExport(value: unknown): value is SyncStreamExport {
   );
 }
 
-function getStreamName(sql: string) {
-  const hash = createHash("sha256").update(sql).digest("hex").slice(0, 16);
-  return `query_${hash}`;
-}
-
 const exportedQueries = Object.values(db).filter(isSyncStreamExport);
 
 const generatedStreams = exportedQueries
   .map((query) => {
-    const normalizedSql = normalizeSql(query.sql);
+    const normalizedSql = normalizeSyncStreamSql(query.sql);
     return formatStream(
-      getStreamName(normalizedSql),
+      getSyncStreamNameForSql(normalizedSql),
       normalizedSql,
-      query.autoSubscribe ?? true,
+      query.autoSubscribe ?? false,
     );
   })
   .join("\n\n");

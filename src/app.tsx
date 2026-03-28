@@ -14,7 +14,7 @@ export default function App() {
     connectPowerSync().then(() => setIsConnected(true));
   });
   return (
-    <Show when={isConnected}>
+    <Show when={isConnected()}>
       <PowerSyncContext.Provider value={powersync}>
         <Router
           root={(props) => (

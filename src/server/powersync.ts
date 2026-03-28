@@ -36,12 +36,12 @@ export async function getPowerSyncToken() {
   const jwt = await new SignJWT({ sub: username, aud: instanceUrl })
     .setProtectedHeader({ alg: "HS256", kid })
     .setIssuedAt()
-    .setExpirationTime("15m")
+    .setExpirationTime("60m")
     .sign(key);
 
   return {
     token: jwt,
-    expiresAt: Date.now() + 15 * 60 * 1000,
+    expiresAt: Date.now() + 60 * 60 * 1000,
   };
 }
 

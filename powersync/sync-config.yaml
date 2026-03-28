@@ -22,7 +22,7 @@ streams:
       - SELECT * FROM agent_runs WHERE channel_id IN (SELECT id FROM user_channels)
 
   # BEGIN GENERATED STREAMS
-  query_61e67c8484289c80:
+  query_2ad31a27a4bb9927:
     auto_subscribe: false
     query: |
       SELECT c.* FROM channels c

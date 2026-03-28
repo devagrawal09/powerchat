@@ -13,7 +13,6 @@ type ChannelRow = {
 
 export function ChannelList() {
   const channels = useIsoQuery<ChannelRow>(channelQuery);
-
   return (
     <div class="flex-1 overflow-y-auto p-2">
       <div class="text-xs font-semibold text-gray-500 uppercase px-2 mb-2">
