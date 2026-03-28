@@ -6,6 +6,7 @@
     "dev:mock": "MOCK_LLM=1 bun dev",
     "build": "vinxi build",
     "start": "vinxi start",
+    "sync:streams": "bun run scripts/generate-sync-streams.ts",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage"
