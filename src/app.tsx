@@ -10,6 +10,7 @@ export default function App() {
   const [isConnected, setIsConnected] = createSignal(false);
 
   createEffect(() => {
+    console.log("[App] connecting to PowerSync");
     connectPowerSync().then(() => setIsConnected(true));
   });
   return (

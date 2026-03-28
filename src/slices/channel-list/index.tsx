@@ -1,8 +1,7 @@
-import { For, Show, createMemo } from "solid-js";
+import { For, Show } from "solid-js";
 import { A } from "@solidjs/router";
-import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 import { DeleteChannel } from "~/slices/delete-channel";
-import { getUsername } from "~/lib/getUsername";
+import { createIsoQuery, useIsoQuery } from "~/lib/isomorphic";
 
 type ChannelRow = {
   id: string;
@@ -11,17 +10,16 @@ type ChannelRow = {
   created_at: string;
 };
 
-export function ChannelList() {
-  const username = createMemo(() => getUsername());
+export const channelQuery = createIsoQuery(
+  () => `
+    SELECT c.* FROM channels c
+    JOIN channel_members cm ON cm.channel_id = c.id
+    WHERE cm.member_type = 'user' AND cm.member_id = auth.user_id()
+  `,
+);
 
-  const channels = useQuery<ChannelRow>(
-    () =>
-      `SELECT c.* FROM channels c
-       JOIN channel_members cm ON cm.channel_id = c.id
-       WHERE cm.member_type = 'user' AND cm.member_id = ?
-       ORDER BY c.created_at DESC`,
-    () => [username() || ""],
-  );
+export function ChannelList() {
+  const channels = useIsoQuery<ChannelRow>(channelQuery);
 
   return (
     <div class="flex-1 overflow-y-auto p-2">

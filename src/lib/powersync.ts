@@ -14,6 +14,7 @@ import {
 // PowerSync connector using SolidStart server functions
 class PowerChatConnector implements PowerSyncBackendConnector {
   async fetchCredentials() {
+    console.log("[fetchCredentials] start");
     // Call server function directly - no HTTP overhead!
     const { token, expiresAt } = await getPowerSyncToken();
     const endpoint = import.meta.env.VITE_POWERSYNC_SERVICE_URL;
