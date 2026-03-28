@@ -1,5 +1,5 @@
 -- PowerChat Database Schema
--- Creates tables for users, agents, channels, memberships, messages
+-- Creates tables for users, agents, channels, memberships, messages, documents, and agent runs
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 

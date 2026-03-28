@@ -37,7 +37,7 @@ The database has already been created and seeded via Neon MCP:
 
 - Project: `powerchat` (ID: `morning-tree-55202603`)
 - Database: `neondb`
-- Tables: `users`, `agents`, `channels`, `channel_members`, `messages`, `message_mentions`, `documents`
+- Tables: `users`, `agents`, `channels`, `channel_members`, `messages`, `documents`, `agent_runs`
 - Demo agents: `Assistant`, `Analyst`, `Researcher`, `Writer`
 
 Connection string should be set in `.env.local` (see Environment Variables section below).

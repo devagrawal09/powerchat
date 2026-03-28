@@ -1,23 +1,30 @@
 import { Router } from "@solidjs/router";
 import { FileRoutes } from "@solidjs/start/router";
-import { Suspense } from "solid-js";
+import { createEffect, createSignal, Show, Suspense } from "solid-js";
 import ChatLayout from "./routes/(chat)";
 import "./app.css";
 import { PowerSyncContext } from "./lib/powersync-solid";
-import { powersync } from "./lib/powersync";
+import { connectPowerSync, powersync } from "./lib/powersync";
 
 export default function App() {
+  const [isConnected, setIsConnected] = createSignal(false);
+
+  createEffect(() => {
+    connectPowerSync().then(() => setIsConnected(true));
+  });
   return (
-    <PowerSyncContext.Provider value={powersync}>
-      <Router
-        root={(props) => (
-          <Suspense fallback={<div>Loading...</div>}>
-            <ChatLayout>{props.children}</ChatLayout>
-          </Suspense>
-        )}
-      >
-        <FileRoutes />
-      </Router>
-    </PowerSyncContext.Provider>
+    <Show when={isConnected}>
+      <PowerSyncContext.Provider value={powersync}>
+        <Router
+          root={(props) => (
+            <Suspense fallback={<div>Loading...</div>}>
+              <ChatLayout>{props.children}</ChatLayout>
+            </Suspense>
+          )}
+        >
+          <FileRoutes />
+        </Router>
+      </PowerSyncContext.Provider>
+    </Show>
   );
 }
