@@ -2,23 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@solidjs/testing-library";
 import { ChannelDocumentsList } from "./index";
 
-// Mock dependencies
-vi.mock("~/lib/powersync-solid/hooks/useQuery", () => ({
-  useQuery: vi.fn(() => () => ({
-    data: [
-      {
-        id: "doc-1",
-        title: "Project Plan",
-        description: "Main project plan document",
-      },
-      {
-        id: "doc-2",
-        title: "Meeting Notes",
-        description: "Notes from team meeting",
-      },
-    ],
-    isLoading: false,
-  })),
+// Mock the server function
+const mockListWorkspaceFiles = vi.fn();
+
+vi.mock("~/server/workspace-files", () => ({
+  listWorkspaceFiles: (...args: unknown[]) => mockListWorkspaceFiles(...args),
 }));
 
 describe("ChannelDocumentsList", () => {
@@ -26,75 +14,115 @@ describe("ChannelDocumentsList", () => {
     vi.clearAllMocks();
   });
 
-  it("renders documents section header", () => {
-    const onDocumentClick = vi.fn();
+  it("renders workspace files section header", () => {
+    mockListWorkspaceFiles.mockResolvedValue([]);
+
+    const onFileClick = vi.fn();
     render(() => (
       <ChannelDocumentsList
         channelId="test-channel"
-        onDocumentClick={onDocumentClick}
+        onFileClick={onFileClick}
       />
     ));
-    expect(screen.getByText("Documents")).toBeInTheDocument();
+    expect(screen.getByText("Workspace Files")).toBeInTheDocument();
   });
 
-  it("renders list of documents", () => {
-    const onDocumentClick = vi.fn();
+  it("renders list of workspace files", async () => {
+    mockListWorkspaceFiles.mockResolvedValue([
+      {
+        name: "README.md",
+        path: "README.md",
+        type: "file",
+        size: 1024,
+        modifiedAt: "2024-01-01T00:00:00.000Z",
+      },
+      {
+        name: "src",
+        path: "src",
+        type: "directory",
+        size: 0,
+        modifiedAt: "2024-01-01T00:00:00.000Z",
+      },
+    ]);
+
+    const onFileClick = vi.fn();
     render(() => (
       <ChannelDocumentsList
         channelId="test-channel"
-        onDocumentClick={onDocumentClick}
+        onFileClick={onFileClick}
       />
     ));
-    expect(screen.getByText("Project Plan")).toBeInTheDocument();
-    expect(screen.getByText("Meeting Notes")).toBeInTheDocument();
+
+    // Wait for async data to load
+    await vi.waitFor(() => {
+      expect(screen.getByText("README.md")).toBeInTheDocument();
+    });
+    expect(screen.getByText("src")).toBeInTheDocument();
   });
 
-  it("calls onDocumentClick when document is clicked", () => {
-    const onDocumentClick = vi.fn();
+  it("calls onFileClick with file path when file is clicked", async () => {
+    mockListWorkspaceFiles.mockResolvedValue([
+      {
+        name: "notes.txt",
+        path: "docs/notes.txt",
+        type: "file",
+        size: 512,
+        modifiedAt: "2024-01-01T00:00:00.000Z",
+      },
+    ]);
+
+    const onFileClick = vi.fn();
     render(() => (
       <ChannelDocumentsList
         channelId="test-channel"
-        onDocumentClick={onDocumentClick}
+        onFileClick={onFileClick}
       />
     ));
-    const projectPlan = screen.getByText("Project Plan");
-    fireEvent.click(projectPlan);
-    expect(onDocumentClick).toHaveBeenCalledWith("doc-1");
+
+    await vi.waitFor(() => {
+      expect(screen.getByText("notes.txt")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("notes.txt"));
+    expect(onFileClick).toHaveBeenCalledWith("docs/notes.txt");
   });
 
-  it("handles empty document list", async () => {
-    const { useQuery } = await import("~/lib/powersync-solid/hooks/useQuery");
-    vi.mocked(useQuery).mockReturnValueOnce(() => ({
-      data: [],
-      isLoading: false,
-    }));
+  it("handles empty workspace (no files)", async () => {
+    mockListWorkspaceFiles.mockResolvedValue([]);
 
-    const onDocumentClick = vi.fn();
+    const onFileClick = vi.fn();
     render(() => (
       <ChannelDocumentsList
         channelId="test-channel"
-        onDocumentClick={onDocumentClick}
+        onFileClick={onFileClick}
       />
     ));
-    expect(screen.getByText("Documents")).toBeInTheDocument();
-    expect(screen.queryByText("Project Plan")).not.toBeInTheDocument();
+
+    // Header should still show
+    expect(screen.getByText("Workspace Files")).toBeInTheDocument();
+
+    // Wait for loading to finish
+    await vi.waitFor(() => {
+      expect(mockListWorkspaceFiles).toHaveBeenCalledWith("test-channel");
+    });
+
+    // No file entries should be present
+    expect(screen.queryByText("README.md")).not.toBeInTheDocument();
   });
 
-  it("hides content while loading", async () => {
-    const { useQuery } = await import("~/lib/powersync-solid/hooks/useQuery");
-    vi.mocked(useQuery).mockReturnValueOnce(() => ({
-      data: [],
-      isLoading: true,
-    }));
+  it("calls listWorkspaceFiles with the correct channelId", async () => {
+    mockListWorkspaceFiles.mockResolvedValue([]);
 
-    const onDocumentClick = vi.fn();
+    const onFileClick = vi.fn();
     render(() => (
       <ChannelDocumentsList
-        channelId="test-channel"
-        onDocumentClick={onDocumentClick}
+        channelId="my-channel-123"
+        onFileClick={onFileClick}
       />
     ));
-    expect(screen.getByText("Documents")).toBeInTheDocument();
-    expect(screen.queryByText("Project Plan")).not.toBeInTheDocument();
+
+    await vi.waitFor(() => {
+      expect(mockListWorkspaceFiles).toHaveBeenCalledWith("my-channel-123");
+    });
   });
 });

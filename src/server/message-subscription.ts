@@ -7,6 +7,7 @@ type MessageRow = {
   channel_id: string;
   author_id: string;
   content: string | null;
+  mentioned_agent: string | null;
   created_at: string | null;
 };
 

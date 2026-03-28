@@ -11,8 +11,8 @@
     "test:coverage": "vitest --coverage"
   },
   "dependencies": {
-    "@mastra/core": "^0.23.1",
-    "@mastra/mcp": "^0.14.1",
+    "@mastra/core": "^1.13.2",
+    "@mastra/mcp": "^1.2.1",
     "@powersync/common": "^1.40.0",
     "@powersync/node": "^0.16.0",
     "@powersync/web": "^1.27.1",

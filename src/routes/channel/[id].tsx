@@ -7,6 +7,7 @@ import { ChannelAgentsList } from "~/slices/channel-agents-list";
 import { ChannelDocumentsList } from "~/slices/channel-documents-list";
 import { DocumentViewer } from "~/slices/document-viewer";
 import { AgentViewer } from "~/slices/agent-viewer";
+import { AgentTraceViewer } from "~/slices/agent-trace-viewer";
 import { ChannelInvite } from "~/slices/channel-invite";
 import { ChannelHeader } from "~/slices/channel-header";
 import { CreateAgent } from "~/slices/create-agent";
@@ -16,8 +17,9 @@ export default function ChannelPage() {
   const params = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const documentId = () => searchParams.doc as string | undefined;
+  const filePath = () => searchParams.doc as string | undefined;
   const agentId = () => searchParams.agent as string | undefined;
+  const traceRunId = () => searchParams.trace as string | undefined;
 
   const channel = useQuery<{ id: string }>(
     () => `SELECT id FROM channels WHERE id = ?`,
@@ -33,7 +35,7 @@ export default function ChannelPage() {
   });
 
   const handleDocumentClick = (docId: string) => {
-    setSearchParams({ doc: docId, agent: undefined });
+    setSearchParams({ doc: docId, agent: undefined, trace: undefined });
   };
 
   const handleCloseDocument = () => {
@@ -41,11 +43,19 @@ export default function ChannelPage() {
   };
 
   const handleAgentClick = (agentId: string) => {
-    setSearchParams({ agent: agentId, doc: undefined });
+    setSearchParams({ agent: agentId, doc: undefined, trace: undefined });
   };
 
   const handleCloseAgent = () => {
     setSearchParams({ agent: undefined });
+  };
+
+  const handleTraceClick = (runId: string) => {
+    setSearchParams({ trace: runId, doc: undefined, agent: undefined });
+  };
+
+  const handleCloseTrace = () => {
+    setSearchParams({ trace: undefined });
   };
 
   return (
@@ -57,15 +67,25 @@ export default function ChannelPage() {
             <ChannelHeader channelId={channelId()} />
 
             <Show
-              when={documentId()}
+              when={filePath()}
               fallback={
                 <Show
                   when={agentId()}
                   fallback={
-                    <>
-                      <ChatMessages channelId={channelId()} />
-                      <ChatInput channelId={channelId()} />
-                    </>
+                    <Show
+                      when={traceRunId()}
+                      fallback={
+                        <>
+                          <ChatMessages channelId={channelId()} />
+                          <ChatInput channelId={channelId()} />
+                        </>
+                      }
+                    >
+                      <AgentTraceViewer
+                        runId={traceRunId()!}
+                        onClose={handleCloseTrace}
+                      />
+                    </Show>
                   }
                 >
                   <AgentViewer
@@ -76,7 +96,8 @@ export default function ChannelPage() {
               }
             >
               <DocumentViewer
-                documentId={documentId()!}
+                channelId={channelId()}
+                filePath={filePath()!}
                 onClose={handleCloseDocument}
               />
             </Show>
@@ -89,10 +110,11 @@ export default function ChannelPage() {
               <ChannelAgentsList
                 channelId={channelId()}
                 onAgentClick={handleAgentClick}
+                onTraceClick={handleTraceClick}
               />
               <ChannelDocumentsList
                 channelId={channelId()}
-                onDocumentClick={handleDocumentClick}
+                onFileClick={handleDocumentClick}
               />
             </div>
             <CreateAgent channelId={channelId()} />

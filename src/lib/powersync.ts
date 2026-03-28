@@ -96,6 +96,7 @@ const schema = new Schema({
       author_type: column.text,
       author_id: column.text,
       content: column.text,
+      mentioned_agent: column.text,
       created_at: column.text,
     },
     {
@@ -117,6 +118,25 @@ const schema = new Schema({
     {
       indexes: {
         idx_documents_channel: ["channel_id"],
+      },
+    },
+  ),
+  agent_runs: new Table(
+    {
+      id: column.text,
+      channel_id: column.text,
+      agent_id: column.text,
+      agent_message_id: column.text,
+      status: column.text,
+      trace: column.text,
+      error: column.text,
+      started_at: column.text,
+      completed_at: column.text,
+    },
+    {
+      indexes: {
+        idx_agent_runs_channel: ["channel_id"],
+        idx_agent_runs_status: ["channel_id", "status"],
       },
     },
   ),

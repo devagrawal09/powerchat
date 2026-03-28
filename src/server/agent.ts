@@ -1,7 +1,7 @@
 "use server";
 import { Agent } from "@mastra/core/agent";
-import { query } from "./db";
-import { listDocuments, createDocument, readDocument } from "./tools/documents";
+import { query, queryInternal } from "./db";
+import { getWorkspace } from "./workspace";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 
@@ -17,19 +17,6 @@ const defaultModel = "openrouter/anthropic/claude-haiku-4.5";
 
 const sanitizeName = (name: string) =>
   name.replace(/[^a-z0-9]/gi, "-").toLowerCase();
-
-const buildDocumentContext = (
-  documents: { title: string; description: string }[],
-): string => {
-  if (documents.length === 0) return "";
-  let context = "\n\nDocuments available in this channel:\n";
-  for (const doc of documents) {
-    context += `- #${doc.title}: ${doc.description}\n`;
-  }
-  context +=
-    "\nYou can reference these documents using #title format in your responses.";
-  return context;
-};
 
 const buildHistory = (rows: any[]) =>
   (rows || [])
@@ -85,36 +72,48 @@ const formatErrorLog = (
   return log;
 };
 
-const applyStreamEvent = (acc: string, ev: any) => {
+/** Build a trace line from a stream event (for the trace panel) */
+const buildTraceLine = (ev: any): string | null => {
   switch (ev?.type) {
     case "text-delta":
-      return acc + (ev.payload?.text ?? "");
+      return ev.payload?.text ?? null;
+    case "tool-call-input-streaming-start":
+      return `\n\n**Tool Call: ${ev.payload?.toolName ?? "tool"}**\n`;
     case "tool-result": {
       const name = ev.payload?.toolName ?? "tool";
       const result = ev.payload?.result;
-      let next = `${acc}\n\n*Tool Result: ${name}*`;
+      let line = `\n\n**Tool Result: ${name}**`;
       if (result && typeof result === "string" && result.length > 0) {
         const snippet =
           result.length > 200 ? `${result.substring(0, 200)}...` : result;
-        next += `\n${snippet}`;
+        line += `\n${snippet}`;
       }
-      return next;
+      return line;
     }
+    case "tool-output":
+      return `\n\n*Tool Call Complete: ${ev.payload?.toolName ?? "tool"}*`;
     case "reasoning-delta": {
       const t = ev.payload?.text ?? "";
-      return t ? acc + t : acc;
+      return t || null;
     }
     case "text-end":
     case "step-finish":
-      return `${acc}\n\n`;
-    case "tool-output":
-      return `${acc}\n\n*Tool Call Complete: ${
-        ev.payload?.toolName ?? "tool"
-      }*`;
-    case "tool-call-input-streaming-start":
-      return `${acc}\n\n*Tool Call: ${ev.payload?.toolName ?? "tool"}*`;
+      return "\n\n";
     case "error":
-      return `${acc}\n\n[Error: ${ev.payload?.message || "Unknown error"}]`;
+      return `\n\n[Error: ${ev.payload?.message || "Unknown error"}]`;
+    default:
+      return null;
+  }
+};
+
+/** Extract only the final text output (no tool calls/reasoning) from stream events */
+const applyFinalTextEvent = (acc: string, ev: any): string => {
+  switch (ev?.type) {
+    case "text-delta":
+      return acc + (ev.payload?.text ?? "");
+    case "text-end":
+    case "step-finish":
+      return `${acc}\n\n`;
     default:
       return acc;
   }
@@ -130,10 +129,24 @@ const buildMockResponse = (
   return `${mention}${agentName} (mock): ${snippet || "Hello"}.`;
 };
 
+// Global registry of active agent run abort controllers
+const activeRuns = new Map<string, AbortController>();
+
+export function stopAgentRun(runId: string): boolean {
+  const controller = activeRuns.get(runId);
+  if (controller) {
+    controller.abort();
+    activeRuns.delete(runId);
+    return true;
+  }
+  return false;
+}
+
 export const processAgentResponse = async (
   channelId: string,
   agentId: string,
   agentMessageId: string,
+  agentRunId: string,
   userMessage: string,
   triggeringUsername: string,
 ) => {
@@ -143,8 +156,20 @@ export const processAgentResponse = async (
       agentMessageId,
     ]);
 
+  const updateTrace = (trace: string) =>
+    queryInternal(`UPDATE agent_runs SET trace = $1 WHERE id = $2`, [
+      trace,
+      agentRunId,
+    ]);
+
+  const completeRun = (status: string, error?: string) =>
+    queryInternal(
+      `UPDATE agent_runs SET status = $1, error = $2, completed_at = $3 WHERE id = $4`,
+      [status, error || null, new Date().toISOString(), agentRunId],
+    );
+
   try {
-    console.log("[agent] Processing agent response", { agentId });
+    console.log("[agent] Processing agent response", { agentId, agentRunId });
 
     const agentInfo = await query(
       `SELECT name, system_instructions, description FROM agents WHERE id = $1`,
@@ -154,13 +179,7 @@ export const processAgentResponse = async (
     const systemInstructions = agentInfo.rows[0]?.system_instructions || "";
     const agentDescription = agentInfo.rows[0]?.description || "";
 
-    const channelDocuments = await query(
-      `SELECT id, title, description
-       FROM documents
-       WHERE channel_id = $1
-       ORDER BY created_at DESC`,
-      [channelId],
-    );
+    const workspace = await getWorkspace(channelId);
 
     const messages = await query(
       `SELECT m.author_type, m.content,
@@ -178,7 +197,6 @@ export const processAgentResponse = async (
       [channelId],
     );
 
-    const documentContext = buildDocumentContext(channelDocuments.rows || []);
     const history = buildHistory(messages.rows || []);
     const input = `Channel: ${channelId}\n${history}\nUser: ${userMessage}`;
 
@@ -190,10 +208,7 @@ export const processAgentResponse = async (
     if (triggeringUsername) {
       instructions += ` Always mention the user who triggered you by using @${triggeringUsername} in your response.`;
     }
-    instructions += documentContext;
-    if (channelDocuments.rows.length) {
-      instructions += `\n\nChannel ID: ${channelId} (use this when calling document tools)`;
-    }
+    instructions += `\n\nYou have access to a workspace with file storage, search, and command execution capabilities. Use the workspace tools to read, write, and search files in this channel's workspace.`;
 
     const logDir = join(process.cwd(), "logs");
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -212,54 +227,107 @@ export const processAgentResponse = async (
     };
     await writeFile(logFile, formatLogEntry(logContext, ""));
 
-    let acc = "";
+    let trace = "";
+    let finalText = "";
     const mock =
       process.env.MOCK_LLM === "1" || process.env.AI_MODEL === "mock";
     if (mock) {
-      acc = buildMockResponse(agentName, userMessage, triggeringUsername);
-      await updateMessage(acc);
+      finalText = buildMockResponse(agentName, userMessage, triggeringUsername);
+      trace = finalText;
+      await updateMessage(finalText);
+      await updateTrace(trace);
+      await completeRun("completed");
       await writeFile(
         logFile,
-        formatLogEntry(logContext, acc, undefined, new Date().toISOString()),
+        formatLogEntry(logContext, finalText, undefined, new Date().toISOString()),
       );
     } else {
+      const abortController = new AbortController();
+      activeRuns.set(agentRunId, abortController);
+
+      const workspaceTools = workspace.getTools();
       const agent = new Agent({
         name: agentName,
         instructions,
         model: process.env.AI_MODEL || defaultModel,
-        tools: {
-          listDocuments,
-          createDocument,
-          readDocument,
-        },
+        tools: workspaceTools,
       });
 
       try {
-        const stream = await agent.stream(input);
+        const stream = await agent.stream(input, {
+          abortSignal: abortController.signal,
+        });
+
+        let traceUpdatePending = false;
+
         for await (const ev of stream.fullStream) {
-          acc = applyStreamEvent(acc, ev);
-          if (acc) await updateMessage(acc);
+          if (abortController.signal.aborted) {
+            break;
+          }
+
+          // Build trace (all events)
+          const traceLine = buildTraceLine(ev);
+          if (traceLine) {
+            trace += traceLine;
+            // Batch trace updates - don't write every single delta
+            if (!traceUpdatePending) {
+              traceUpdatePending = true;
+              setTimeout(async () => {
+                traceUpdatePending = false;
+                await updateTrace(trace).catch(() => {});
+              }, 300);
+            }
+          }
+
+          // Build final text (only text deltas, no tool calls)
+          finalText = applyFinalTextEvent(finalText, ev);
+
+          // Update message with "Thinking..." while tools are being used,
+          // or with partial final text if we have some
+          if (finalText.trim()) {
+            await updateMessage(finalText);
+          }
+        }
+
+        // Final trace flush
+        await updateTrace(trace);
+
+        if (abortController.signal.aborted) {
+          await updateMessage(finalText.trim() || "*(Agent stopped)*");
+          await completeRun("stopped");
+        } else {
+          await updateMessage(finalText.trim() || "*(No response)*");
+          await completeRun("completed");
         }
       } catch (streamError: any) {
-        acc += `\n\n[Error: ${
-          streamError.message || "Stream processing failed"
-        }]`;
-        await updateMessage(acc);
-        await writeFile(
-          logFile,
-          formatLogEntry(
-            logContext,
-            acc,
-            streamError.message,
-            new Date().toISOString(),
-          ),
-        );
-        throw streamError;
+        if (streamError.name === "AbortError") {
+          await updateMessage(finalText.trim() || "*(Agent stopped)*");
+          await completeRun("stopped");
+        } else {
+          finalText += `\n\n[Error: ${
+            streamError.message || "Stream processing failed"
+          }]`;
+          await updateMessage(finalText);
+          await updateTrace(trace + `\n\n[Error: ${streamError.message}]`);
+          await completeRun("error", streamError.message);
+          await writeFile(
+            logFile,
+            formatLogEntry(
+              logContext,
+              trace,
+              streamError.message,
+              new Date().toISOString(),
+            ),
+          );
+          throw streamError;
+        }
+      } finally {
+        activeRuns.delete(agentRunId);
       }
 
       await writeFile(
         logFile,
-        formatLogEntry(logContext, acc, undefined, new Date().toISOString()),
+        formatLogEntry(logContext, trace, undefined, new Date().toISOString()),
       );
     }
 
@@ -270,6 +338,12 @@ export const processAgentResponse = async (
       await updateMessage(`Error: ${error.message}`);
     } catch (dbError) {
       console.error("[agent] Failed to update error message:", dbError);
+    }
+
+    try {
+      await completeRun("error", error.message);
+    } catch (runError) {
+      console.error("[agent] Failed to update agent run:", runError);
     }
 
     try {

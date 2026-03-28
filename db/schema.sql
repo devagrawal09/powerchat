@@ -48,8 +48,12 @@ CREATE TABLE IF NOT EXISTS messages (
   author_type TEXT NOT NULL CHECK (author_type IN ('user','agent')),
   author_id TEXT NOT NULL,
   content TEXT NOT NULL,
+  mentioned_agent JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Add mentioned_agent column if it doesn't exist (for existing databases)
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS mentioned_agent JSONB;
 
 -- Documents (markdown content scoped to channels)
 CREATE TABLE IF NOT EXISTS documents (
@@ -61,8 +65,23 @@ CREATE TABLE IF NOT EXISTS documents (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Agent runs (tracks active agent executions with trace data)
+CREATE TABLE IF NOT EXISTS agent_runs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+  agent_id TEXT NOT NULL,
+  agent_message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'completed', 'error', 'stopped')),
+  trace TEXT NOT NULL DEFAULT '',
+  error TEXT,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed_at TIMESTAMPTZ
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_channel_members_member ON channel_members (member_type, member_id);
 CREATE INDEX IF NOT EXISTS idx_messages_channel_time ON messages (channel_id, created_at, id);
 CREATE INDEX IF NOT EXISTS idx_messages_author ON messages (author_type, author_id);
 CREATE INDEX IF NOT EXISTS idx_documents_channel ON documents (channel_id);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_channel ON agent_runs (channel_id);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_status ON agent_runs (channel_id, status);

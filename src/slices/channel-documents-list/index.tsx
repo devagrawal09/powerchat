@@ -1,41 +1,39 @@
-import { For, Show } from "solid-js";
-import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
-
-type DocumentRow = {
-  id: string;
-  title: string;
-  description: string;
-};
+import { For, Show, createResource, createEffect, on } from "solid-js";
+import {
+  listWorkspaceFiles,
+  type WorkspaceFileEntry,
+} from "~/server/workspace-files";
 
 type ChannelDocumentsListProps = {
   channelId: string;
-  onDocumentClick: (documentId: string) => void;
+  onFileClick: (filePath: string) => void;
 };
 
 export function ChannelDocumentsList(props: ChannelDocumentsListProps) {
-  // Documents in channel
-  const documents = useQuery<DocumentRow>(
-    () =>
-      `SELECT id, title, description 
-       FROM documents 
-       WHERE channel_id = ? 
-       ORDER BY created_at DESC`,
-    () => [props.channelId]
+  const [files, { refetch }] = createResource(
+    () => props.channelId,
+    (channelId) => listWorkspaceFiles(channelId),
   );
+
+  // Refetch when channelId changes
+  createEffect(on(() => props.channelId, () => refetch()));
 
   return (
     <>
       <div class="text-xs font-semibold text-gray-500 uppercase mt-4 mb-2">
-        Documents
+        Workspace Files
       </div>
-      <Show when={!documents().isLoading}>
-        <For each={documents().data}>
-          {(doc) => (
+      <Show when={!files.loading}>
+        <For each={files() ?? []}>
+          {(file) => (
             <div
-              onClick={() => props.onDocumentClick(doc.id)}
-              class="text-sm text-gray-900 py-1 cursor-pointer hover:text-blue-600 hover:underline"
+              onClick={() => props.onFileClick(file.path)}
+              class="text-sm text-gray-900 py-1 cursor-pointer hover:text-blue-600 hover:underline flex items-center gap-1"
             >
-              {doc.title}
+              <span class="text-gray-400">
+                {file.type === "directory" ? "📁" : "📄"}
+              </span>
+              {file.name}
             </div>
           )}
         </For>

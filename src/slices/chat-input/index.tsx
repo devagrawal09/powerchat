@@ -2,7 +2,7 @@ import { createSignal, createMemo } from "solid-js";
 import { getUsername } from "~/lib/getUsername";
 import { usePowerSync } from "~/lib/powersync-solid";
 import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
-import { MentionAutocomplete } from "~/slices/mention-autocomplete";
+import { MentionAutocomplete, type MentionOption } from "~/slices/mention-autocomplete";
 
 type MemberRow = {
   member_type: "user" | "agent";
@@ -16,6 +16,12 @@ type DocumentRow = {
   description: string;
 };
 
+type SelectedAgent = {
+  id: string;
+  name: string;
+  type: "agent";
+};
+
 type ChatInputProps = {
   channelId: string;
   channelName?: string;
@@ -24,6 +30,7 @@ type ChatInputProps = {
 export function ChatInput(props: ChatInputProps) {
   const [content, setContent] = createSignal("");
   const [activeMentionIndex, setActiveMentionIndex] = createSignal(0);
+  const [selectedAgent, setSelectedAgent] = createSignal<SelectedAgent | null>(null);
   const powersync = usePowerSync();
 
   // Detect mention query from content (@ for members)
@@ -116,7 +123,7 @@ export function ChatInput(props: ChatInputProps) {
     const list = (members().data || [])
       .filter((m) => m.name)
       .map((m) => ({
-        type: m.member_type,
+        type: m.member_type as "user" | "agent",
         id: m.member_id,
         name: m.name!,
       }));
@@ -136,7 +143,28 @@ export function ChatInput(props: ChatInputProps) {
     return list.filter((o) => fuzzyMatch(o.name, q));
   });
 
-  const handleMentionSelect = (name: string) => {
+  // Check if the agent mention text is still present in the content
+  // This tracks removal of the agent mention to re-enable agent selection
+  const agentStillMentioned = createMemo(() => {
+    const agent = selectedAgent();
+    if (!agent) return false;
+    const text = content();
+    const mentionPattern = new RegExp(`@${agent.name}\\b`, "i");
+    return mentionPattern.test(text);
+  });
+
+  // Reactive: clear selectedAgent if the mention text is removed
+  const effectiveSelectedAgent = createMemo(() => {
+    const agent = selectedAgent();
+    if (agent && !agentStillMentioned()) {
+      // Defer the state update to avoid setting state during render
+      queueMicrotask(() => setSelectedAgent(null));
+      return null;
+    }
+    return agent;
+  });
+
+  const handleMentionSelect = (option: MentionOption) => {
     const state = activeMentionState();
     if (state.isOpen) {
       const before = content().slice(0, state.cursorPosition);
@@ -144,15 +172,32 @@ export function ChatInput(props: ChatInputProps) {
         state.cursorPosition + state.query.length + 1,
       );
       const prefix = state.type === "#" ? "#" : "@";
-      setContent(before + prefix + name + " " + after);
+      setContent(before + prefix + option.name + " " + after);
       setActiveMentionIndex(0);
+
+      // Track agent selection
+      if (option.type === "agent") {
+        setSelectedAgent({
+          id: option.id,
+          name: option.name,
+          type: "agent",
+        });
+      }
     }
   };
 
   const handleSend = async () => {
     const text = content().trim();
     if (!text) return;
+
+    // Capture agent metadata before clearing
+    const agent = effectiveSelectedAgent();
+    const mentionedAgent = agent
+      ? JSON.stringify({ id: agent.id, type: "agent", name: agent.name })
+      : null;
+
     setContent("");
+    setSelectedAgent(null);
 
     try {
       const messageId = crypto.randomUUID();
@@ -173,9 +218,10 @@ export function ChatInput(props: ChatInputProps) {
         username,
         messageId,
         text,
+        mentionedAgent,
       });
 
-      // Insert user message
+      // Insert user message with agent metadata
       const t = powersync.writeTransaction(async (tx) => {
         console.log("before execute", {
           tx,
@@ -183,12 +229,13 @@ export function ChatInput(props: ChatInputProps) {
           channelId: props.channelId,
           username,
           text,
+          mentionedAgent,
           userMessageCreatedAt,
         });
         const result = tx.execute(
-          `INSERT INTO messages (id, channel_id, author_type, author_id, content, created_at)
-           VALUES (?, ?, 'user', ?, ?, ?)`,
-          [messageId, props.channelId, username, text, userMessageCreatedAt],
+          `INSERT INTO messages (id, channel_id, author_type, author_id, content, mentioned_agent, created_at)
+           VALUES (?, ?, 'user', ?, ?, ?, ?)`,
+          [messageId, props.channelId, username, text, mentionedAgent, userMessageCreatedAt],
         );
         console.log("after execute sync");
 
@@ -203,9 +250,10 @@ export function ChatInput(props: ChatInputProps) {
       console.log("after writeTransaction async");
     } catch (error: unknown) {
       console.error("[send] error", error);
-      // Error will be handled by the server function
     }
   };
+
+  const hasAgent = () => effectiveSelectedAgent() !== null;
 
   return (
     <div class="border-t border-gray-200 p-4 bg-white">
@@ -222,19 +270,26 @@ export function ChatInput(props: ChatInputProps) {
                   state.type === "#"
                     ? documentMentionOptions()
                     : mentionOptions();
+                // Skip disabled agent entries when navigating
+                const isOptionDisabled = (idx: number) => {
+                  const opt = options[idx];
+                  return opt?.type === "agent" && hasAgent();
+                };
                 if (e.key === "ArrowDown") {
                   e.preventDefault();
-                  setActiveMentionIndex((prev) =>
-                    Math.min(options.length - 1, prev + 1),
-                  );
+                  let next = activeMentionIndex() + 1;
+                  while (next < options.length && isOptionDisabled(next)) next++;
+                  if (next < options.length) setActiveMentionIndex(next);
                 } else if (e.key === "ArrowUp") {
                   e.preventDefault();
-                  setActiveMentionIndex((prev) => Math.max(0, prev - 1));
+                  let prev = activeMentionIndex() - 1;
+                  while (prev >= 0 && isOptionDisabled(prev)) prev--;
+                  if (prev >= 0) setActiveMentionIndex(prev);
                 } else if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   const activeOption = options[activeMentionIndex()];
-                  if (activeOption) {
-                    handleMentionSelect(activeOption.name);
+                  if (activeOption && !(activeOption.type === "agent" && hasAgent())) {
+                    handleMentionSelect(activeOption);
                   }
                 } else if (e.key === "Escape") {
                   e.preventDefault();
@@ -251,7 +306,11 @@ export function ChatInput(props: ChatInputProps) {
               }
             }}
             placeholder={`Message #${props.channelName || "channel"}...`}
-            class="w-full px-4 py-2 border border-gray-300 rounded text-gray-900 placeholder-gray-400 bg-white"
+            class={`w-full px-4 py-2 border rounded text-gray-900 placeholder-gray-400 bg-white transition-colors ${
+              hasAgent()
+                ? "border-purple-400 ring-1 ring-purple-300 bg-purple-50/30"
+                : "border-gray-300"
+            }`}
           />
           <MentionAutocomplete
             channelId={props.channelId}
@@ -259,6 +318,7 @@ export function ChatInput(props: ChatInputProps) {
             mentionType={activeMentionState().type}
             isOpen={activeMentionState().isOpen}
             activeIndex={activeMentionIndex()}
+            disabledAgents={hasAgent()}
             onSelect={handleMentionSelect}
             onActiveIndexChange={setActiveMentionIndex}
           />
@@ -271,6 +331,14 @@ export function ChatInput(props: ChatInputProps) {
           Send
         </button>
       </div>
+      {hasAgent() && (
+        <div class="mt-1 flex items-center gap-1">
+          <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-purple-500" />
+            Agent: {effectiveSelectedAgent()!.name}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
