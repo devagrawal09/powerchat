@@ -10,6 +10,7 @@ export type IsoQuery = {
 
 export type IsoMutation = {
   readonly sql: string;
+  readonly execute: () => void;
 };
 
 export function createIsoQuery(
@@ -27,24 +28,28 @@ export function createIsoQuery(
 }
 
 export function useIsoQuery<T>(query: ReturnType<typeof createIsoQuery>) {
+  const streamName = createMemo(() => getSyncStreamNameForSql(query.sql));
+
   const userId = createMemo(() => getUsername());
   const resolvedSql = createMemo(() =>
     query.sql.replace(`auth.user_id()`, userId()!),
   );
-  const streamName = createMemo(() => getSyncStreamNameForSql(query.sql));
-  createEffect(() => {
-    console.log(`streamName`, streamName());
-    console.log(`resolvedSql:`, resolvedSql());
-  });
+
   return useQuery<T>(resolvedSql, undefined, () => ({
     streams: [{ name: streamName() }],
   }));
 }
 
 export function createIsoMutation(sql: () => string): IsoMutation {
+  const db = usePowerSync();
   return {
     get sql() {
       return sql();
+    },
+    execute: () => {
+      // start transaction
+      // execute the mutation locally
+      // add an entry into the iso mutations table
     },
   } as const;
 }

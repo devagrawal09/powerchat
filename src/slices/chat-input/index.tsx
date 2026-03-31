@@ -2,7 +2,10 @@ import { createSignal, createMemo } from "solid-js";
 import { getUsername } from "~/lib/getUsername";
 import { usePowerSync } from "~/lib/powersync-solid";
 import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
-import { MentionAutocomplete, type MentionOption } from "~/slices/mention-autocomplete";
+import {
+  MentionAutocomplete,
+  type MentionOption,
+} from "~/slices/mention-autocomplete";
 
 type MemberRow = {
   member_type: "user" | "agent";
@@ -30,7 +33,9 @@ type ChatInputProps = {
 export function ChatInput(props: ChatInputProps) {
   const [content, setContent] = createSignal("");
   const [activeMentionIndex, setActiveMentionIndex] = createSignal(0);
-  const [selectedAgent, setSelectedAgent] = createSignal<SelectedAgent | null>(null);
+  const [selectedAgent, setSelectedAgent] = createSignal<SelectedAgent | null>(
+    null,
+  );
   const powersync = usePowerSync();
 
   // Detect mention query from content (@ for members)
@@ -235,7 +240,14 @@ export function ChatInput(props: ChatInputProps) {
         const result = tx.execute(
           `INSERT INTO messages (id, channel_id, author_type, author_id, content, mentioned_agent, created_at)
            VALUES (?, ?, 'user', ?, ?, ?, ?)`,
-          [messageId, props.channelId, username, text, mentionedAgent, userMessageCreatedAt],
+          [
+            messageId,
+            props.channelId,
+            username,
+            text,
+            mentionedAgent,
+            userMessageCreatedAt,
+          ],
         );
         console.log("after execute sync");
 
@@ -278,7 +290,8 @@ export function ChatInput(props: ChatInputProps) {
                 if (e.key === "ArrowDown") {
                   e.preventDefault();
                   let next = activeMentionIndex() + 1;
-                  while (next < options.length && isOptionDisabled(next)) next++;
+                  while (next < options.length && isOptionDisabled(next))
+                    next++;
                   if (next < options.length) setActiveMentionIndex(next);
                 } else if (e.key === "ArrowUp") {
                   e.preventDefault();
@@ -288,7 +301,10 @@ export function ChatInput(props: ChatInputProps) {
                 } else if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   const activeOption = options[activeMentionIndex()];
-                  if (activeOption && !(activeOption.type === "agent" && hasAgent())) {
+                  if (
+                    activeOption &&
+                    !(activeOption.type === "agent" && hasAgent())
+                  ) {
                     handleMentionSelect(activeOption);
                   }
                 } else if (e.key === "Escape") {

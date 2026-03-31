@@ -145,6 +145,18 @@ const schema = new Schema({
       },
     },
   ),
+  iso_mutations: new Table(
+    {
+      id: column.text,
+      mutation_key: column.text,
+      params: column.text,
+    },
+    {
+      indexes: {
+        idx_iso_mutations_sql: ["mutation_key"],
+      },
+    },
+  ),
 });
 
 export const powersync = new PowerSyncDatabase({

@@ -22,10 +22,4 @@ streams:
       - SELECT * FROM agent_runs WHERE channel_id IN (SELECT id FROM user_channels)
 
   # BEGIN GENERATED STREAMS
-  query_2ad31a27a4bb9927:
-    auto_subscribe: false
-    query: |
-      SELECT c.* FROM channels c
-      JOIN channel_members cm ON cm.channel_id = c.id
-      WHERE cm.member_type = 'user' AND cm.member_id = auth.user_id()
   # END GENERATED STREAMS
