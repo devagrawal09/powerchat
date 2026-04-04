@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@solidjs/testing-library";
 import { ChannelList } from "./index";
 
+const { mockUseQuery } = vi.hoisted(() => ({
+  mockUseQuery: vi.fn(),
+}));
+
 // Mock dependencies
 vi.mock("@solidjs/router", () => ({
   A: (props: any) => <a href={props.href}>{props.children}</a>,
@@ -22,11 +26,13 @@ const mockChannels = [
   },
 ];
 
-vi.mock("~/lib/powersync-solid/hooks/useQuery", () => ({
-  useQuery: vi.fn(() => () => ({
+vi.mock("~/lib/powersync-solid", () => ({
+  useQuery: mockUseQuery,
+}));
+
+mockUseQuery.mockReturnValue(() => ({
     data: mockChannels,
     isLoading: false,
-  })),
 }));
 
 vi.mock("~/slices/delete-channel", () => ({
@@ -37,8 +43,11 @@ vi.mock("~/slices/delete-channel", () => ({
 
 describe("ChannelList", () => {
   beforeEach(() => {
-    // Reset all mocks before each test
     vi.clearAllMocks();
+    mockUseQuery.mockReturnValue(() => ({
+      data: mockChannels,
+      isLoading: false,
+    }));
   });
   it("renders channel list header", () => {
     render(() => <ChannelList />);
@@ -58,9 +67,7 @@ describe("ChannelList", () => {
   });
 
   it("shows loading state while query is loading", async () => {
-    // Import and mock for this specific test
-    const { useQuery } = await import("~/lib/powersync-solid/hooks/useQuery");
-    vi.mocked(useQuery).mockReturnValueOnce(() => ({
+    mockUseQuery.mockReturnValueOnce(() => ({
       data: [],
       isLoading: true,
       error: undefined,

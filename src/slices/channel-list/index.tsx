@@ -1,8 +1,7 @@
 import { For, Show } from "solid-js";
 import { A } from "@solidjs/router";
-import { channelQuery } from "~/db";
 import { DeleteChannel } from "~/slices/delete-channel";
-import { useIsoQuery } from "~/lib/isomorphic";
+import { useQuery } from "~/lib/powersync-solid";
 
 type ChannelRow = {
   id: string;
@@ -12,7 +11,7 @@ type ChannelRow = {
 };
 
 export function ChannelList() {
-  const channels = useIsoQuery<ChannelRow>(channelQuery);
+  const channels = useQuery<ChannelRow>(() => "SELECT * from channels");
 
   return (
     <div class="flex-1 overflow-y-auto p-2">

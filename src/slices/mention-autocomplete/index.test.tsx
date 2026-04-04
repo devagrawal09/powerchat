@@ -29,6 +29,7 @@ describe("MentionAutocomplete", () => {
         mentionType="@"
         isOpen={false}
         activeIndex={0}
+        disabledAgents={false}
         onSelect={vi.fn()}
         onActiveIndexChange={vi.fn()}
       />
@@ -44,6 +45,7 @@ describe("MentionAutocomplete", () => {
         mentionType="@"
         isOpen={true}
         activeIndex={0}
+        disabledAgents={false}
         onSelect={vi.fn()}
         onActiveIndexChange={vi.fn()}
       />
@@ -61,6 +63,7 @@ describe("MentionAutocomplete", () => {
         mentionType="@"
         isOpen={true}
         activeIndex={0}
+        disabledAgents={false}
         onSelect={onSelect}
         onActiveIndexChange={vi.fn()}
       />
@@ -69,7 +72,11 @@ describe("MentionAutocomplete", () => {
     const button = screen.getByText("@Assistant").closest("button");
     fireEvent.mouseDown(button!);
 
-    expect(onSelect).toHaveBeenCalledWith("Assistant");
+    expect(onSelect).toHaveBeenCalledWith({
+      type: "agent",
+      id: "00000000-0000-0000-0000-000000000001",
+      name: "Assistant",
+    });
   });
 
   it("calls onActiveIndexChange on hover", () => {
@@ -81,6 +88,7 @@ describe("MentionAutocomplete", () => {
         mentionType="@"
         isOpen={true}
         activeIndex={0}
+        disabledAgents={false}
         onSelect={vi.fn()}
         onActiveIndexChange={onActiveIndexChange}
       />
@@ -100,6 +108,7 @@ describe("MentionAutocomplete", () => {
         mentionType="@"
         isOpen={true}
         activeIndex={0}
+        disabledAgents={false}
         onSelect={vi.fn()}
         onActiveIndexChange={vi.fn()}
       />
