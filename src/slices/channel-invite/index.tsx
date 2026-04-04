@@ -1,5 +1,13 @@
+import { and, asc, eq } from "drizzle-orm";
+import {
+  agents,
+  channelMembers as channelMembersTable,
+  clientDb,
+  liveQuery,
+  users,
+} from "~/db/client";
 import { createSignal, Show, For, createMemo } from "solid-js";
-import { useQuery, usePowerSync } from "~/lib/powersync-solid";
+import { useQuery } from "~/lib/powersync-solid";
 import { getUsername } from "~/lib/getUsername";
 
 type ChannelInviteProps = {
@@ -32,29 +40,50 @@ export function ChannelInvite(props: ChannelInviteProps) {
     text: string;
   } | null>(null);
 
-  // Get all available agents
-  const allAgents = useQuery<AgentRow>(
-    () => `SELECT id, name, description FROM agents ORDER BY name`,
-    () => [],
-  );
-
-  // Get agents already in channel
-  const channelAgents = useQuery<MemberRow>(
+  const allAgents = useQuery(
     () =>
-      `SELECT member_id FROM channel_members WHERE channel_id = ? AND member_type = 'agent'`,
-    () => [props.channelId],
+      liveQuery(
+        clientDb
+          .select({
+            id: agents.id,
+            name: agents.name,
+            description: agents.description,
+          })
+          .from(agents)
+          .orderBy(asc(agents.name)),
+      ),
   );
 
-  // Get all users for validation
-  const allUsers = useQuery<UserRow>(
-    () => `SELECT id FROM users`,
-    () => [],
+  const channelAgents = useQuery(
+    () =>
+      liveQuery(
+        clientDb
+          .select({ member_id: channelMembersTable.memberId })
+          .from(channelMembersTable)
+          .where(
+            and(
+              eq(channelMembersTable.channelId, props.channelId),
+              eq(channelMembersTable.memberType, "agent"),
+            ),
+          ),
+      ),
   );
 
-  // Get current channel members to check for duplicates
-  const channelMembers = useQuery<MemberRow>(
-    () => `SELECT member_id FROM channel_members WHERE channel_id = ?`,
-    () => [props.channelId],
+  const allUsers = useQuery(
+    () =>
+      liveQuery(
+        clientDb.select({ id: users.id }).from(users).orderBy(asc(users.id)),
+      ),
+  );
+
+  const channelMembers = useQuery(
+    () =>
+      liveQuery(
+        clientDb
+          .select({ member_id: channelMembersTable.memberId })
+          .from(channelMembersTable)
+          .where(eq(channelMembersTable.channelId, props.channelId)),
+      ),
   );
 
   // Filter out agents already in channel
@@ -64,8 +93,6 @@ export function ChannelInvite(props: ChannelInviteProps) {
     );
     return (allAgents().data || []).filter((a) => !inChannel.has(a.id));
   });
-
-  const powersync = usePowerSync();
 
   const handleInviteUser = async (e: Event) => {
     e.preventDefault();
@@ -105,11 +132,6 @@ export function ChannelInvite(props: ChannelInviteProps) {
       return;
     }
 
-    if (!powersync) {
-      setMessage({ type: "error", text: "PowerSync not configured" });
-      return;
-    }
-
     setSubmitting(true);
     setMessage(null);
 
@@ -117,12 +139,12 @@ export function ChannelInvite(props: ChannelInviteProps) {
       const memberId = crypto.randomUUID();
       const now = new Date().toISOString();
 
-      await powersync.writeTransaction(async (tx) => {
-        await tx.execute(
-          `INSERT INTO channel_members (id, channel_id, member_type, member_id, joined_at)
-           VALUES (?, ?, 'user', ?, ?)`,
-          [memberId, props.channelId, value, now],
-        );
+      await clientDb.insert(channelMembersTable).values({
+        id: memberId,
+        channelId: props.channelId,
+        memberType: "user",
+        memberId: value,
+        joinedAt: now,
       });
 
       setMessage({ type: "success", text: `${value} added to channel!` });
@@ -175,11 +197,6 @@ export function ChannelInvite(props: ChannelInviteProps) {
       return;
     }
 
-    if (!powersync) {
-      setMessage({ type: "error", text: "PowerSync not configured" });
-      return;
-    }
-
     setSubmitting(true);
     setMessage(null);
 
@@ -187,12 +204,12 @@ export function ChannelInvite(props: ChannelInviteProps) {
       const memberId = crypto.randomUUID();
       const now = new Date().toISOString();
 
-      await powersync.writeTransaction(async (tx) => {
-        await tx.execute(
-          `INSERT INTO channel_members (id, channel_id, member_type, member_id, joined_at)
-           VALUES (?, ?, 'agent', ?, ?)`,
-          [memberId, props.channelId, agentId, now],
-        );
+      await clientDb.insert(channelMembersTable).values({
+        id: memberId,
+        channelId: props.channelId,
+        memberType: "agent",
+        memberId: agentId,
+        joinedAt: now,
       });
 
       const agentName =

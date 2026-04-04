@@ -1,5 +1,12 @@
+import { and, asc, eq, sql } from "drizzle-orm";
+import {
+  agents,
+  clientDb,
+  liveQuery,
+  messages as messagesTable,
+  users,
+} from "~/db/client";
 import { For, Show, createMemo, createEffect } from "solid-js";
-import { usePowerSync } from "~/lib/powersync-solid";
 import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 import { RenderMarkdown } from "~/components/Markdown";
 import { getUsername } from "~/lib/getUsername";
@@ -7,7 +14,7 @@ import { getUsername } from "~/lib/getUsername";
 type MessageRow = {
   id: string;
   channel_id: string;
-  author_type: "user" | "agent" | "system";
+  author_type: string;
   author_id: string;
   content: string;
   created_at: string;
@@ -21,24 +28,46 @@ type ChatMessagesProps = {
 export function ChatMessages(props: ChatMessagesProps) {
   console.log(`ChatMessages props: ${JSON.stringify(props)}`);
   let scrollContainer: HTMLDivElement | undefined;
-  const powersync = usePowerSync();
+  const authorName = sql<string>`
+    case
+      when ${messagesTable.authorType} = 'system' then 'System'
+      when ${messagesTable.authorType} = 'user' then ${users.id}
+      when ${messagesTable.authorType} = 'agent' then ${agents.name}
+      else ${messagesTable.authorId}
+    end
+  `;
 
-  // Query messages with author names via JOIN
-  const messages = useQuery<MessageRow>(
+  const messages = useQuery(
     () =>
-      `SELECT m.*,
-              CASE
-                WHEN m.author_type = 'system' THEN 'System'
-                WHEN m.author_type = 'user' THEN u.id
-                WHEN m.author_type = 'agent' THEN a.name
-                ELSE m.author_id
-              END AS author_name
-       FROM messages m
-       LEFT JOIN users u ON m.author_type = 'user' AND u.id = m.author_id
-       LEFT JOIN agents a ON m.author_type = 'agent' AND a.id = m.author_id
-       WHERE m.channel_id = ?
-       ORDER BY m.created_at ASC, m.id ASC`,
-    () => [props.channelId],
+      liveQuery(
+        clientDb
+          .select({
+            id: messagesTable.id,
+            channel_id: messagesTable.channelId,
+            author_type: messagesTable.authorType,
+            author_id: messagesTable.authorId,
+            content: messagesTable.content,
+            created_at: messagesTable.createdAt,
+            author_name: authorName,
+          })
+          .from(messagesTable)
+          .leftJoin(
+            users,
+            and(
+              eq(messagesTable.authorType, "user"),
+              eq(users.id, messagesTable.authorId),
+            ),
+          )
+          .leftJoin(
+            agents,
+            and(
+              eq(messagesTable.authorType, "agent"),
+              eq(agents.id, messagesTable.authorId),
+            ),
+          )
+          .where(eq(messagesTable.channelId, props.channelId))
+          .orderBy(asc(messagesTable.createdAt), asc(messagesTable.id)),
+      ),
   );
 
   // Helper to get author name
@@ -87,14 +116,7 @@ export function ChatMessages(props: ChatMessagesProps) {
 
   // Delete message handler
   const handleDeleteMessage = async (messageId: string) => {
-    if (!powersync) {
-      console.error("[delete message] PowerSync not configured");
-      return;
-    }
-
-    await powersync.writeTransaction(async (tx) => {
-      await tx.execute("DELETE FROM messages WHERE id = ?", [messageId]);
-    });
+    await clientDb.delete(messagesTable).where(eq(messagesTable.id, messageId));
   };
 
   return (

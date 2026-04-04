@@ -1,5 +1,7 @@
 import { For, Show } from "solid-js";
 import { A } from "@solidjs/router";
+import { asc } from "drizzle-orm";
+import { channels, clientDb, liveQuery } from "~/db/client";
 import { DeleteChannel } from "~/slices/delete-channel";
 import { useQuery } from "~/lib/powersync-solid";
 
@@ -11,7 +13,19 @@ type ChannelRow = {
 };
 
 export function ChannelList() {
-  const channels = useQuery<ChannelRow>(() => "SELECT * from channels");
+  const channelsQuery = useQuery(() =>
+    liveQuery(
+      clientDb
+        .select({
+          id: channels.id,
+          name: channels.name,
+          created_by: channels.createdBy,
+          created_at: channels.createdAt,
+        })
+        .from(channels)
+        .orderBy(asc(channels.name)),
+    ),
+  );
 
   return (
     <div class="flex-1 overflow-y-auto p-2">
@@ -19,10 +33,10 @@ export function ChannelList() {
         Channels
       </div>
       <Show
-        when={!channels().isLoading}
+        when={!channelsQuery().isLoading}
         fallback={<div class="px-2 text-sm text-gray-500">Loading...</div>}
       >
-        <For each={channels().data}>
+        <For each={channelsQuery().data}>
           {(channel) => (
             <div class="flex items-center group">
               <A

@@ -1,4 +1,11 @@
-import { queryInternal } from "./db";
+import { and, eq, or, sql } from "drizzle-orm";
+import {
+  agentRuns,
+  agents,
+  channelMembers,
+  messages,
+} from "~/db/schema/server";
+import { db } from "./db";
 import { processAgentResponse } from "./agent";
 
 type MentionedAgent = {
@@ -46,29 +53,24 @@ export async function onMessage(message: MessageRow): Promise<void> {
     const agentRunId = crypto.randomUUID();
     const agentMessageCreatedAt = new Date().toISOString();
 
-    await queryInternal(
-      `INSERT INTO messages (id, channel_id, author_type, author_id, content, created_at)
-       VALUES ($1, $2, 'agent', $3, $4, $5)`,
-      [
-        agentMessageId,
-        message.channel_id,
-        agentId,
-        "Thinking...",
-        agentMessageCreatedAt,
-      ],
-    );
+    await db.insert(messages).values({
+      id: agentMessageId,
+      channelId: message.channel_id,
+      authorType: "agent",
+      authorId: agentId,
+      content: "Thinking...",
+      createdAt: agentMessageCreatedAt,
+    });
 
-    await queryInternal(
-      `INSERT INTO agent_runs (id, channel_id, agent_id, agent_message_id, status, trace, started_at)
-       VALUES ($1, $2, $3, $4, 'running', '', $5)`,
-      [
-        agentRunId,
-        message.channel_id,
-        agentId,
-        agentMessageId,
-        agentMessageCreatedAt,
-      ],
-    );
+    await db.insert(agentRuns).values({
+      id: agentRunId,
+      channelId: message.channel_id,
+      agentId,
+      agentMessageId,
+      status: "running",
+      trace: "",
+      startedAt: agentMessageCreatedAt,
+    });
 
     console.log("[onMessage] inserted placeholder + agent run", {
       id: message.id,
@@ -119,23 +121,27 @@ async function resolveAgentFromMetadata(message: MessageRow): Promise<string[]> 
   if (!parsed.id || parsed.type !== "agent") return [];
 
   // Validate agent exists and is a member of this channel
-  const result = await queryInternal(
-    `SELECT a.id
-     FROM agents a
-     JOIN channel_members cm
-       ON cm.member_id = a.id::text
-      AND cm.member_type = 'agent'
-     WHERE cm.channel_id = $1
-       AND a.id = $2::uuid`,
-    [message.channel_id, parsed.id],
-  );
+  const result = await db
+    .select({ id: agents.id })
+    .from(agents)
+    .innerJoin(
+      channelMembers,
+      sql`${channelMembers.memberId} = ${agents.id}::text and ${channelMembers.memberType} = 'agent'`,
+    )
+    .where(
+      and(
+        eq(channelMembers.channelId, message.channel_id),
+        eq(agents.id, parsed.id),
+      ),
+    )
+    .limit(1);
 
-  if (!result.rows?.length) {
+  if (!result.length) {
     console.warn("[onMessage] mentioned agent not found or not in channel", parsed);
     return [];
   }
 
-  return [String(result.rows[0].id)];
+  return [String(result[0].id)];
 }
 
 /**
@@ -150,19 +156,22 @@ async function resolveAgentsFromText(content: string, channelId: string): Promis
 
   if (mentionedNames.length === 0) return [];
 
-  const agentRows = await queryInternal(
-    `SELECT a.id, a.name
-     FROM agents a
-     JOIN channel_members cm
-       ON cm.member_id = a.id::text
-      AND cm.member_type = 'agent'
-     WHERE cm.channel_id = $1
-       AND lower(a.name) = ANY($2)
-     ORDER BY a.name`,
-    [channelId, mentionedNames],
-  );
+  const agentRows = await db
+    .select({ id: agents.id, name: agents.name })
+    .from(agents)
+    .innerJoin(
+      channelMembers,
+      sql`${channelMembers.memberId} = ${agents.id}::text and ${channelMembers.memberType} = 'agent'`,
+    )
+    .where(
+      and(
+        eq(channelMembers.channelId, channelId),
+        or(...mentionedNames.map((name) => sql`lower(${agents.name}) = ${name}`)),
+      ),
+    )
+    .orderBy(agents.name);
 
-  if (!agentRows.rows?.length) return [];
+  if (!agentRows.length) return [];
 
-  return agentRows.rows.map((row) => String(row.id));
+  return agentRows.map((row) => String(row.id));
 }

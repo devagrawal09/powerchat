@@ -1,8 +1,17 @@
+import { and, asc, desc, eq, sql } from "drizzle-orm";
+import {
+  agents,
+  channelMembers,
+  clientDb,
+  documents as documentsTable,
+  liveQuery,
+  users,
+} from "~/db/client";
 import { createMemo, For, Show } from "solid-js";
 import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 
 type MemberRow = {
-  member_type: "user" | "agent";
+  member_type: string;
   member_id: string;
   name: string | null;
 };
@@ -31,29 +40,56 @@ type MentionAutocompleteProps = {
 };
 
 export function MentionAutocomplete(props: MentionAutocompleteProps) {
-  const members = useQuery<MemberRow>(
+  const memberName = sql<string>`
+    case
+      when ${channelMembers.memberType} = 'user' then coalesce(${users.id}, ${channelMembers.memberId})
+      when ${channelMembers.memberType} = 'agent' then coalesce(${agents.name}, 'Agent')
+      else ${channelMembers.memberId}
+    end
+  `;
+
+  const members = useQuery(
     () =>
-      `SELECT cm.member_type, cm.member_id,
-              CASE
-                WHEN cm.member_type = 'user' THEN COALESCE(u.id, cm.member_id)
-                WHEN cm.member_type = 'agent' THEN COALESCE(a.name, 'Agent')
-                ELSE cm.member_id
-              END AS name
-       FROM channel_members cm
-       LEFT JOIN users u ON cm.member_type = 'user' AND u.id = cm.member_id
-       LEFT JOIN agents a ON cm.member_type = 'agent' AND a.id = cm.member_id
-       WHERE cm.channel_id = ?
-       ORDER BY cm.member_type, name`,
-    () => [props.channelId]
+      liveQuery(
+        clientDb
+          .select({
+            member_type: channelMembers.memberType,
+            member_id: channelMembers.memberId,
+            name: memberName,
+          })
+          .from(channelMembers)
+          .leftJoin(
+            users,
+            and(
+              eq(channelMembers.memberType, "user"),
+              eq(users.id, channelMembers.memberId),
+            ),
+          )
+          .leftJoin(
+            agents,
+            and(
+              eq(channelMembers.memberType, "agent"),
+              eq(agents.id, channelMembers.memberId),
+            ),
+          )
+          .where(eq(channelMembers.channelId, props.channelId))
+          .orderBy(asc(channelMembers.memberType), asc(memberName)),
+      ),
   );
 
-  const documents = useQuery<DocumentRow>(
+  const documents = useQuery(
     () =>
-      `SELECT id, title, description
-       FROM documents
-       WHERE channel_id = ?
-       ORDER BY created_at DESC`,
-    () => [props.channelId]
+      liveQuery(
+        clientDb
+          .select({
+            id: documentsTable.id,
+            title: documentsTable.title,
+            description: documentsTable.description,
+          })
+          .from(documentsTable)
+          .where(eq(documentsTable.channelId, props.channelId))
+          .orderBy(desc(documentsTable.createdAt)),
+      ),
   );
 
   // Fuzzy search utility

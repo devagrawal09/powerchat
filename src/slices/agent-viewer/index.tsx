@@ -1,3 +1,5 @@
+import { eq } from "drizzle-orm";
+import { agents, clientDb, liveQuery } from "~/db/client";
 import { Show } from "solid-js";
 import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 import { RenderMarkdown } from "~/components/Markdown";
@@ -15,12 +17,19 @@ type AgentViewerProps = {
 };
 
 export function AgentViewer(props: AgentViewerProps) {
-  const agent = useQuery<AgentRow>(
+  const agent = useQuery(
     () =>
-      `SELECT id, name, description, system_instructions 
-       FROM agents 
-       WHERE id = ?`,
-    () => [props.agentId]
+      liveQuery(
+        clientDb
+          .select({
+            id: agents.id,
+            name: agents.name,
+            description: agents.description,
+            system_instructions: agents.systemInstructions,
+          })
+          .from(agents)
+          .where(eq(agents.id, props.agentId)),
+      ),
   );
 
   return (

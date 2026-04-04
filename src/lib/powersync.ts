@@ -5,11 +5,38 @@ import {
   createBaseLogger,
   LogLevel,
 } from "@powersync/web";
-import { column, Schema, Table } from "@powersync/web";
+import {
+  DrizzleAppSchema,
+  wrapPowerSyncWithDrizzle,
+  type PowerSyncSQLiteDatabase,
+} from "@powersync/drizzle-driver";
 import {
   getPowerSyncToken,
   uploadData as uploadToServer,
 } from "~/server/powersync";
+import { clientSchema } from "~/db/schema/client";
+
+const isTestEnv =
+  import.meta.env.MODE === "test" || process.env.VITEST === "true";
+
+function createTestClientDb(): PowerSyncSQLiteDatabase<typeof clientSchema> {
+  const lockContext = {
+    execute: async () => undefined,
+    getAll: async () => [],
+    get: async () => null,
+    getOptional: async () => null,
+  };
+
+  const testDb = {
+    readLock: async (callback: (ctx: typeof lockContext) => unknown) =>
+      callback(lockContext),
+    writeLock: async (callback: (ctx: typeof lockContext) => unknown) =>
+      callback(lockContext),
+    watch: () => {},
+  } as any;
+
+  return wrapPowerSyncWithDrizzle(testDb, { schema: clientSchema });
+}
 
 // PowerSync connector using SolidStart server functions
 class PowerChatConnector implements PowerSyncBackendConnector {
@@ -59,104 +86,19 @@ class PowerChatConnector implements PowerSyncBackendConnector {
   }
 }
 
-const schema = new Schema({
-  users: new Table({
-    id: column.text,
-    created_at: column.text,
-  }),
-  agents: new Table({
-    id: column.text,
-    name: column.text,
-    model_config: column.text,
-    system_instructions: column.text,
-    description: column.text,
-    created_at: column.text,
-  }),
-  channels: new Table({
-    id: column.text,
-    name: column.text,
-    created_by: column.text,
-    created_at: column.text,
-  }),
-  channel_members: new Table(
-    {
-      id: column.text,
-      channel_id: column.text,
-      member_type: column.text,
-      member_id: column.text,
-      joined_at: column.text,
-    },
-    { indexes: { idx_channel_members_member: ["member_type", "member_id"] } },
-  ),
-  messages: new Table(
-    {
-      id: column.text,
-      channel_id: column.text,
-      author_type: column.text,
-      author_id: column.text,
-      content: column.text,
-      mentioned_agent: column.text,
-      created_at: column.text,
-    },
-    {
-      indexes: {
-        idx_messages_channel_time: ["channel_id", "created_at", "id"],
-        idx_messages_author: ["author_type", "author_id"],
-      },
-    },
-  ),
-  documents: new Table(
-    {
-      id: column.text,
-      channel_id: column.text,
-      title: column.text,
-      description: column.text,
-      content: column.text,
-      created_at: column.text,
-    },
-    {
-      indexes: {
-        idx_documents_channel: ["channel_id"],
-      },
-    },
-  ),
-  agent_runs: new Table(
-    {
-      id: column.text,
-      channel_id: column.text,
-      agent_id: column.text,
-      agent_message_id: column.text,
-      status: column.text,
-      trace: column.text,
-      error: column.text,
-      started_at: column.text,
-      completed_at: column.text,
-    },
-    {
-      indexes: {
-        idx_agent_runs_channel: ["channel_id"],
-        idx_agent_runs_status: ["channel_id", "status"],
-      },
-    },
-  ),
-  iso_mutations: new Table(
-    {
-      id: column.text,
-      mutation_key: column.text,
-      params: column.text,
-    },
-    {
-      indexes: {
-        idx_iso_mutations_sql: ["mutation_key"],
-      },
-    },
-  ),
-});
+export const powerSyncSchema = new DrizzleAppSchema(clientSchema);
 
-export const powersync = new PowerSyncDatabase({
-  schema,
-  database: { dbFilename: "powerchat.db" },
-});
+export const powersync = isTestEnv
+  ? ({} as PowerSyncDatabase)
+  : new PowerSyncDatabase({
+      schema: powerSyncSchema,
+      database: { dbFilename: "powerchat.db" },
+    });
+export const clientDb = isTestEnv
+  ? createTestClientDb()
+  : wrapPowerSyncWithDrizzle(powersync, {
+      schema: clientSchema,
+    });
 const connector = new PowerChatConnector();
 
 const logger = createBaseLogger();
@@ -166,6 +108,11 @@ let isInitialized = false;
 
 export async function connectPowerSync() {
   if (isInitialized) {
+    return;
+  }
+
+  if (isTestEnv) {
+    isInitialized = true;
     return;
   }
 

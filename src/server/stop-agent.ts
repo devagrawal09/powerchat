@@ -1,6 +1,8 @@
 "use server";
+import { and, eq } from "drizzle-orm";
+import { agentRuns } from "~/db/schema/server";
 import { stopAgentRun } from "./agent";
-import { queryInternal } from "./db";
+import { db } from "./db";
 
 export async function stopAgent(runId: string): Promise<{ success: boolean }> {
   console.log("[stop-agent] stopping run", runId);
@@ -11,10 +13,10 @@ export async function stopAgent(runId: string): Promise<{ success: boolean }> {
   // Also mark the run as stopped in the database (in case the abort didn't work
   // or the process already finished)
   try {
-    await queryInternal(
-      `UPDATE agent_runs SET status = 'stopped', completed_at = $1 WHERE id = $2 AND status = 'running'`,
-      [new Date().toISOString(), runId],
-    );
+    await db
+      .update(agentRuns)
+      .set({ status: "stopped", completedAt: new Date().toISOString() })
+      .where(and(eq(agentRuns.id, runId), eq(agentRuns.status, "running")));
   } catch (err) {
     console.error("[stop-agent] failed to update DB", err);
   }

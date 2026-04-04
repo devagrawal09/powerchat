@@ -1,4 +1,5 @@
-import { usePowerSync } from "~/lib/powersync-solid";
+import { eq } from "drizzle-orm";
+import { channels, clientDb } from "~/db/client";
 
 type DeleteChannelProps = {
   channelId: string;
@@ -6,16 +7,8 @@ type DeleteChannelProps = {
 };
 
 export function DeleteChannel(props: DeleteChannelProps) {
-  const powersync = usePowerSync();
-
   const handleDelete = async () => {
-    if (!powersync) {
-      return;
-    }
-
-    await powersync.writeTransaction(async (tx) => {
-      await tx.execute("DELETE FROM channels WHERE id = ?", [props.channelId]);
-    });
+    await clientDb.delete(channels).where(eq(channels.id, props.channelId));
     props.onDelete?.();
   };
 

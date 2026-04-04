@@ -1,3 +1,11 @@
+import { and, asc, desc, eq, sql } from "drizzle-orm";
+import {
+  agentRuns,
+  agents as agentsTable,
+  channelMembers,
+  clientDb,
+  liveQuery,
+} from "~/db/client";
 import { For, Show, createMemo } from "solid-js";
 import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 import { stopAgent } from "~/server/stop-agent";
@@ -21,26 +29,53 @@ type ChannelAgentsListProps = {
 };
 
 export function ChannelAgentsList(props: ChannelAgentsListProps) {
-  // Agents in channel
-  const agents = useQuery<MemberRow>(
+  const agentName = sql<string>`coalesce(${agentsTable.name}, 'Agent')`;
+
+  const agents = useQuery(
     () =>
-      `SELECT 'agent' as member_type, cm.member_id as member_id,
-              COALESCE(a.name, 'Agent') as name
-       FROM channel_members cm
-       LEFT JOIN agents a ON cm.member_type = 'agent' AND a.id = cm.member_id
-       WHERE cm.channel_id = ? AND cm.member_type = 'agent'
-       ORDER BY name`,
-    () => [props.channelId],
+      liveQuery(
+        clientDb
+          .select({
+            member_type: sql<"agent">`'agent'`,
+            member_id: channelMembers.memberId,
+            name: agentName,
+          })
+          .from(channelMembers)
+          .leftJoin(
+            agentsTable,
+            and(
+              eq(channelMembers.memberType, "agent"),
+              eq(agentsTable.id, channelMembers.memberId),
+            ),
+          )
+          .where(
+            and(
+              eq(channelMembers.channelId, props.channelId),
+              eq(channelMembers.memberType, "agent"),
+            ),
+          )
+          .orderBy(asc(agentName)),
+      ),
   );
 
-  // Active agent runs in this channel
-  const activeRuns = useQuery<AgentRunRow>(
+  const activeRuns = useQuery(
     () =>
-      `SELECT id, agent_id, status
-       FROM agent_runs
-       WHERE channel_id = ? AND status = 'running'
-       ORDER BY started_at DESC`,
-    () => [props.channelId],
+      liveQuery(
+        clientDb
+          .select({
+            id: agentRuns.id,
+            agent_id: agentRuns.agentId,
+            status: agentRuns.status,
+          })
+          .from(agentRuns)
+          .where(
+            and(
+              eq(agentRuns.channelId, props.channelId),
+              eq(agentRuns.status, "running"),
+            ),
+          )
+          .orderBy(desc(agentRuns.startedAt)),
+      ),
   );
 
   const runsByAgent = createMemo(() => {

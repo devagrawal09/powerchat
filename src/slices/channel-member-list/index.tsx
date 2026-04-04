@@ -1,3 +1,10 @@
+import { and, asc, eq, sql } from "drizzle-orm";
+import {
+  channelMembers,
+  clientDb,
+  liveQuery,
+  users as usersTable,
+} from "~/db/client";
 import { For, Show } from "solid-js";
 import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 
@@ -12,15 +19,33 @@ type ChannelMemberListProps = {
 };
 
 export function ChannelMemberList(props: ChannelMemberListProps) {
-  // Users in channel
-  const users = useQuery<MemberRow>(
+  const memberName = sql<string>`coalesce(${usersTable.id}, ${channelMembers.memberId})`;
+
+  const users = useQuery(
     () =>
-      `SELECT 'user' as member_type, cm.member_id as member_id, COALESCE(u.id, cm.member_id) as name
-       FROM channel_members cm
-       LEFT JOIN users u ON cm.member_type = 'user' AND u.id = cm.member_id
-       WHERE cm.channel_id = ? AND cm.member_type = 'user'
-       ORDER BY name`,
-    () => [props.channelId]
+      liveQuery(
+        clientDb
+          .select({
+            member_type: sql<"user">`'user'`,
+            member_id: channelMembers.memberId,
+            name: memberName,
+          })
+          .from(channelMembers)
+          .leftJoin(
+            usersTable,
+            and(
+              eq(channelMembers.memberType, "user"),
+              eq(usersTable.id, channelMembers.memberId),
+            ),
+          )
+          .where(
+            and(
+              eq(channelMembers.channelId, props.channelId),
+              eq(channelMembers.memberType, "user"),
+            ),
+          )
+          .orderBy(asc(memberName)),
+      ),
   );
 
   return (

@@ -1,4 +1,6 @@
 import { Pool } from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { serverSchema } from "~/db/schema/server";
 
 let pool: Pool | null = null;
 
@@ -14,7 +16,12 @@ function getPool(): Pool {
   return pool;
 }
 
-export async function queryInternal(text: string, params?: any[]) {
+export const db = drizzle({
+  client: getPool(),
+  schema: serverSchema,
+});
+
+export async function queryInternal(text: string, params?: unknown[]) {
   const client = await getPool().connect();
   try {
     return await client.query(text, params);
@@ -23,29 +30,7 @@ export async function queryInternal(text: string, params?: any[]) {
   }
 }
 
-export async function query(text: string, params?: any[]) {
+export async function query(text: string, params?: unknown[]) {
   "use server";
-  const client = await getPool().connect();
-  try {
-    return await client.query(text, params);
-  } finally {
-    client.release();
-  }
-}
-
-export async function getOne<T = any>(
-  text: string,
-  params?: any[]
-): Promise<T | null> {
-  const result = await queryInternal(text, params);
-  return result.rows[0] || null;
-}
-
-export async function getMany<T = any>(
-  text: string,
-  params?: any[]
-): Promise<T[]> {
-  "use server";
-  const result = await query(text, params);
-  return result.rows;
+  return queryInternal(text, params);
 }

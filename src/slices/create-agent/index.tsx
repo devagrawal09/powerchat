@@ -1,5 +1,6 @@
+import { asc } from "drizzle-orm";
+import { agents, clientDb, liveQuery } from "~/db/client";
 import { createSignal, Show } from "solid-js";
-import { usePowerSync } from "~/lib/powersync-solid";
 import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 
 type CreateAgentProps = {
@@ -13,7 +14,6 @@ type AgentRow = {
 };
 
 export function CreateAgent(props: CreateAgentProps) {
-  const powersync = usePowerSync();
   const [isOpen, setIsOpen] = createSignal(false);
   const [name, setName] = createSignal("");
   const [systemInstructions, setSystemInstructions] = createSignal("");
@@ -24,10 +24,14 @@ export function CreateAgent(props: CreateAgentProps) {
     text: string;
   } | null>(null);
 
-  // Query existing agents to check for duplicates
-  const existingAgents = useQuery<AgentRow>(
-    () => `SELECT id, name FROM agents`,
-    () => []
+  const existingAgents = useQuery(
+    () =>
+      liveQuery(
+        clientDb
+          .select({ id: agents.id, name: agents.name })
+          .from(agents)
+          .orderBy(asc(agents.name)),
+      ),
   );
 
   const handleSubmit = async (e: Event) => {
@@ -71,27 +75,16 @@ export function CreateAgent(props: CreateAgentProps) {
     setMessage(null);
 
     try {
-      if (!powersync) {
-        setMessage({ type: "error", text: "PowerSync not configured" });
-        return;
-      }
-
       const agentId = crypto.randomUUID();
       const now = new Date().toISOString();
 
-      await powersync.writeTransaction(async (tx) => {
-        await tx.execute(
-          `INSERT INTO agents (id, name, system_instructions, description, model_config, created_at)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [
-            agentId,
-            trimmedName,
-            trimmedSystemInstructions,
-            trimmedDescription,
-            JSON.stringify({}),
-            now,
-          ]
-        );
+      await clientDb.insert(agents).values({
+        id: agentId,
+        name: trimmedName,
+        systemInstructions: trimmedSystemInstructions,
+        description: trimmedDescription,
+        modelConfig: JSON.stringify({}),
+        createdAt: now,
       });
 
       setMessage({ type: "success", text: `Agent "${trimmedName}" created!` });

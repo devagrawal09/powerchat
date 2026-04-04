@@ -1,12 +1,11 @@
 import { createSignal } from "solid-js";
 import { useNavigate } from "@solidjs/router";
+import { channelMembers, channels, clientDb } from "~/db/client";
 import { getUsername } from "~/lib/getUsername";
-import { usePowerSync } from "~/lib/powersync-solid";
 
 export function CreateChannel() {
   const navigate = useNavigate();
   const [creating, setCreating] = createSignal(false);
-  const powersync = usePowerSync();
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
@@ -27,34 +26,31 @@ export function CreateChannel() {
         return;
       }
 
-      if (!powersync) {
-        console.error("PowerSync not configured");
-        setCreating(false);
-        return;
-      }
+      const now = new Date().toISOString();
 
-      await powersync.writeTransaction(async (tx) => {
-        // Insert channel
-        await tx.execute(
-          `INSERT INTO channels (id, name, created_by, created_at) VALUES (?, ?, ?, datetime('now'))`,
-          [channelId, name, username]
-        );
+      await clientDb.transaction(async (tx) => {
+        await tx.insert(channels).values({
+          id: channelId,
+          name,
+          createdBy: username,
+          createdAt: now,
+        });
 
-        // Add user as member
-        await tx.execute(
-          `INSERT INTO channel_members (id, channel_id, member_type, member_id, joined_at) VALUES (?, ?, 'user', ?, datetime('now'))`,
-          [crypto.randomUUID(), channelId, username]
-        );
+        await tx.insert(channelMembers).values({
+          id: crypto.randomUUID(),
+          channelId,
+          memberType: "user",
+          memberId: username,
+          joinedAt: now,
+        });
 
-        // Auto-add assistant agent
-        await tx.execute(
-          `INSERT INTO channel_members (id, channel_id, member_type, member_id, joined_at) VALUES (?, ?, 'agent', ?, datetime('now'))`,
-          [
-            crypto.randomUUID(),
-            channelId,
-            "00000000-0000-0000-0000-000000000001",
-          ]
-        );
+        await tx.insert(channelMembers).values({
+          id: crypto.randomUUID(),
+          channelId,
+          memberType: "agent",
+          memberId: "00000000-0000-0000-0000-000000000001",
+          joinedAt: now,
+        });
       });
 
       form.reset();

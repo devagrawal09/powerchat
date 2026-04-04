@@ -4,12 +4,11 @@ import {
   PowerSyncBackendConnector,
   createBaseLogger,
   LogLevel,
-  column,
-  Schema,
-  Table,
 } from "@powersync/node";
+import { DrizzleAppSchema } from "@powersync/drizzle-driver";
 import { mkdir } from "fs/promises";
 import { join } from "path";
+import { clientSchema } from "~/db/schema/client";
 
 class PowerChatServerConnector implements PowerSyncBackendConnector {
   async fetchCredentials() {
@@ -44,24 +43,7 @@ class PowerChatServerConnector implements PowerSyncBackendConnector {
 const logger = createBaseLogger();
 logger.setLevel(LogLevel.INFO);
 
-const schema = new Schema({
-  messages: new Table(
-    {
-      id: column.text,
-      channel_id: column.text,
-      author_type: column.text,
-      author_id: column.text,
-      content: column.text,
-      created_at: column.text,
-    },
-    {
-      indexes: {
-        idx_messages_channel_time: ["channel_id", "created_at", "id"],
-        idx_messages_author: ["author_type", "author_id"],
-      },
-    },
-  ),
-});
+const schema = new DrizzleAppSchema(clientSchema);
 
 let db: PowerSyncDatabase | null = null;
 let initPromise: Promise<PowerSyncDatabase> | null = null;

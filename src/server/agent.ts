@@ -1,6 +1,13 @@
 "use server";
 import { Agent } from "@mastra/core/agent";
-import { query, queryInternal } from "./db";
+import { and, asc, eq, sql } from "drizzle-orm";
+import {
+  agentRuns as agentRunsTable,
+  agents as agentsTable,
+  messages as messagesTable,
+  users as usersTable,
+} from "~/db/schema/server";
+import { db } from "./db";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 
@@ -150,51 +157,70 @@ export const processAgentResponse = async (
   triggeringUsername: string,
 ) => {
   const updateMessage = (content: string) =>
-    query(`UPDATE messages SET content = $1 WHERE id = $2`, [
-      content,
-      agentMessageId,
-    ]);
+    db
+      .update(messagesTable)
+      .set({ content })
+      .where(eq(messagesTable.id, agentMessageId));
 
   const updateTrace = (trace: string) =>
-    queryInternal(`UPDATE agent_runs SET trace = $1 WHERE id = $2`, [
-      trace,
-      agentRunId,
-    ]);
+    db
+      .update(agentRunsTable)
+      .set({ trace })
+      .where(eq(agentRunsTable.id, agentRunId));
 
   const completeRun = (status: string, error?: string) =>
-    queryInternal(
-      `UPDATE agent_runs SET status = $1, error = $2, completed_at = $3 WHERE id = $4`,
-      [status, error || null, new Date().toISOString(), agentRunId],
-    );
+    db
+      .update(agentRunsTable)
+      .set({
+        status,
+        error: error || null,
+        completedAt: new Date().toISOString(),
+      })
+      .where(eq(agentRunsTable.id, agentRunId));
 
   try {
     console.log("[agent] Processing agent response", { agentId, agentRunId });
 
-    const agentInfo = await query(
-      `SELECT name, system_instructions, description FROM agents WHERE id = $1`,
-      [agentId],
-    );
-    const agentName = agentInfo.rows[0]?.name || "Agent";
-    const systemInstructions = agentInfo.rows[0]?.system_instructions || "";
-    const agentDescription = agentInfo.rows[0]?.description || "";
+    const agentInfo = await db
+      .select({
+        name: agentsTable.name,
+        system_instructions: agentsTable.systemInstructions,
+        description: agentsTable.description,
+      })
+      .from(agentsTable)
+      .where(eq(agentsTable.id, agentId))
+      .limit(1);
+    const agentName = agentInfo[0]?.name || "Agent";
+    const systemInstructions = agentInfo[0]?.system_instructions || "";
+    const agentDescription = agentInfo[0]?.description || "";
 
-    const messages = await query(
-      `SELECT m.author_type, m.content,
-        CASE
-          WHEN m.author_type = 'user' THEN u.id
-          WHEN m.author_type = 'agent' THEN a.name
-          WHEN m.author_type = 'system' THEN 'System'
-        END as author_name
-       FROM messages m
-       LEFT JOIN users u ON m.author_type = 'user' AND m.author_id = u.id
-       LEFT JOIN agents a ON m.author_type = 'agent' AND m.author_id = a.id::text
-       WHERE m.channel_id = $1
-       ORDER BY m.created_at ASC, m.id ASC
-       LIMIT 30`,
-      [channelId],
-    );
+    const messages = await db
+      .select({
+        author_type: messagesTable.authorType,
+        content: messagesTable.content,
+        author_name: sql<string>`case
+          when ${messagesTable.authorType} = 'user' then ${usersTable.id}
+          when ${messagesTable.authorType} = 'agent' then ${agentsTable.name}
+          when ${messagesTable.authorType} = 'system' then 'System'
+        end`,
+      })
+      .from(messagesTable)
+      .leftJoin(
+        usersTable,
+        and(
+          eq(messagesTable.authorType, "user"),
+          eq(usersTable.id, messagesTable.authorId),
+        ),
+      )
+      .leftJoin(
+        agentsTable,
+        sql`${messagesTable.authorType} = 'agent' and ${messagesTable.authorId} = ${agentsTable.id}::text`,
+      )
+      .where(eq(messagesTable.channelId, channelId))
+      .orderBy(asc(messagesTable.createdAt), asc(messagesTable.id))
+      .limit(30);
 
-    const history = buildHistory(messages.rows || []);
+    const history = buildHistory(messages || []);
     const input = `Channel: ${channelId}\n${history}\nUser: ${userMessage}`;
 
     let instructions =
@@ -350,11 +376,12 @@ export const processAgentResponse = async (
     try {
       const logDir = join(process.cwd(), "logs");
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const errorAgentInfo = await query(
-        `SELECT name FROM agents WHERE id = $1`,
-        [agentId],
-      );
-      const errorAgentName = errorAgentInfo.rows[0]?.name || "unknown";
+      const errorAgentInfo = await db
+        .select({ name: agentsTable.name })
+        .from(agentsTable)
+        .where(eq(agentsTable.id, agentId))
+        .limit(1);
+      const errorAgentName = errorAgentInfo[0]?.name || "unknown";
       const logFile = join(
         logDir,
         `agent-${sanitizeName(errorAgentName)}-${timestamp}.log`,

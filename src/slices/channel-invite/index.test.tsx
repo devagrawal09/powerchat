@@ -2,11 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@solidjs/testing-library";
 import { ChannelInvite } from "./index";
 
-const { mockExecute, mockWriteTransaction } = vi.hoisted(() => {
-  const execute = vi.fn();
+const { mockInsertValues, mockInsert, mockClientDb } = vi.hoisted(() => {
+  const insertValues = vi.fn().mockResolvedValue(undefined);
   return {
-    mockExecute: execute,
-    mockWriteTransaction: vi.fn(async (cb: any) => cb({ execute })),
+    mockInsertValues: insertValues,
+    mockInsert: vi.fn(() => ({ values: insertValues })),
+    mockClientDb: {
+      insert: vi.fn(() => ({ values: insertValues })),
+    },
   };
 });
 
@@ -16,44 +19,37 @@ let queryData = {
   allUsers: [{ id: "alice" }, { id: "bob" }],
   channelMembers: [{ member_id: "alice" }],
 };
+let queryCall = 0;
 
 vi.mock("~/lib/getUsername", () => ({
   getUsername: vi.fn(() => "alice"),
 }));
 
+vi.mock("~/db/client", () => ({
+  agents: {},
+  channelMembers: {},
+  clientDb: mockClientDb,
+  liveQuery: (query: any) => query,
+  users: {},
+}));
+
 vi.mock("~/lib/powersync-solid", () => ({
-  usePowerSync: vi.fn(() => ({
-    writeTransaction: mockWriteTransaction,
-  })),
-  useQuery: vi.fn((query: () => string) => () => {
-    const sql = query();
-    if (sql.includes("FROM agents")) {
-      return { data: queryData.allAgents, isLoading: false, error: undefined };
-    }
-    if (sql.includes("member_type = 'agent'")) {
-      return {
-        data: queryData.channelAgents,
-        isLoading: false,
-        error: undefined,
-      };
-    }
-    if (sql.includes("SELECT id FROM users")) {
-      return { data: queryData.allUsers, isLoading: false, error: undefined };
-    }
-    if (sql.includes("SELECT member_id FROM channel_members WHERE channel_id = ?")) {
-      return {
-        data: queryData.channelMembers,
-        isLoading: false,
-        error: undefined,
-      };
-    }
-    return { data: [], isLoading: false, error: undefined };
+  useQuery: vi.fn(() => {
+    const result = [
+      queryData.allAgents,
+      queryData.channelAgents,
+      queryData.allUsers,
+      queryData.channelMembers,
+    ][queryCall++] ?? [];
+    return () => ({ data: result, isLoading: false, error: undefined });
   }),
 }));
 
 describe("ChannelInvite", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockClientDb.insert = mockInsert;
+    queryCall = 0;
     queryData = {
       allAgents: [{ id: "agent-1", name: "Assistant", description: "Helpful" }],
       channelAgents: [],
@@ -95,13 +91,17 @@ describe("ChannelInvite", () => {
     fireEvent.click(screen.getByText("Add User"));
 
     await waitFor(() => {
-      expect(mockWriteTransaction).toHaveBeenCalled();
+      expect(mockClientDb.insert).toHaveBeenCalled();
       expect(screen.getByText("bob added to channel!")).toBeInTheDocument();
     });
 
-    const executeArgs = mockExecute.mock.calls[0][1];
-    expect(executeArgs[1]).toBe("test-channel-123");
-    expect(executeArgs[2]).toBe("bob");
+    expect(mockInsertValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channelId: "test-channel-123",
+        memberId: "bob",
+        memberType: "user",
+      }),
+    );
     expect(screen.getByPlaceholderText("Enter username")).toHaveValue("");
   });
 
@@ -123,11 +123,15 @@ describe("ChannelInvite", () => {
     fireEvent.click(screen.getByText("Add Agent"));
 
     await waitFor(() => {
-      expect(mockWriteTransaction).toHaveBeenCalled();
+      expect(mockClientDb.insert).toHaveBeenCalled();
       expect(screen.getByText("Assistant added to channel!")).toBeInTheDocument();
     });
 
-    const executeArgs = mockExecute.mock.calls[0][1];
-    expect(executeArgs[2]).toBe("agent-1");
+    expect(mockInsertValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        memberId: "agent-1",
+        memberType: "agent",
+      }),
+    );
   });
 });

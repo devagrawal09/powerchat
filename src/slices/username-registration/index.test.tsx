@@ -2,20 +2,22 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@solidjs/testing-library";
 import { UsernameRegistration } from "./index";
 
-const { mockExecute, mockWriteTransaction } = vi.hoisted(() => {
-  const execute = vi.fn();
+const { mockInsertValues, mockInsert } = vi.hoisted(() => {
+  const insertValues = vi.fn().mockResolvedValue(undefined);
   return {
-    mockExecute: execute,
-    mockWriteTransaction: vi.fn(async (cb: any) => cb({ execute })),
+    mockInsertValues: insertValues,
+    mockInsert: vi.fn(() => ({ values: insertValues })),
   };
 });
 
 let existingUsers: Array<{ id: string }> = [];
 
-vi.mock("~/lib/powersync-solid", () => ({
-  usePowerSync: vi.fn(() => ({
-    writeTransaction: mockWriteTransaction,
-  })),
+vi.mock("~/db/client", () => ({
+  clientDb: {
+    insert: mockInsert,
+  },
+  liveQuery: (query: any) => query,
+  users: {},
 }));
 
 vi.mock("~/lib/powersync-solid/hooks/useQuery", () => ({
@@ -83,7 +85,7 @@ describe("UsernameRegistration", () => {
     await waitFor(() => {
       expect(screen.getByText("Username already taken")).toBeInTheDocument();
     });
-    expect(mockWriteTransaction).not.toHaveBeenCalled();
+    expect(mockInsert).not.toHaveBeenCalled();
   });
 
   it("registers username and calls onSuccess", async () => {
@@ -94,13 +96,14 @@ describe("UsernameRegistration", () => {
     fireEvent.submit(input.closest("form")!);
 
     await waitFor(() => {
-      expect(mockWriteTransaction).toHaveBeenCalled();
+      expect(mockInsert).toHaveBeenCalled();
       expect(mockOnSuccess).toHaveBeenCalledWith("testuser");
       expect(document.cookie).toContain("pc_username=testuser");
     });
 
-    const executeArgs = mockExecute.mock.calls[0][1];
-    expect(executeArgs[0]).toBe("testuser");
+    expect(mockInsertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "testuser" }),
+    );
   });
 
   it("disables button when username is too short", () => {

@@ -1,9 +1,15 @@
 "use server";
 
+import { and, eq } from "drizzle-orm";
 import { SignJWT } from "jose";
 import { getCookie } from "vinxi/http";
 import { getRequestEvent } from "solid-js/web";
-import { query } from "./db";
+import {
+  channelMembers,
+  channels,
+  messages,
+} from "~/db/schema/server";
+import { db, query } from "./db";
 import { UpdateType } from "@powersync/common";
 
 type UploadOperation = {
@@ -52,14 +58,19 @@ async function isChannelMember(
 ): Promise<boolean> {
   if (!channelId) return false;
 
-  const result = await query(
-    `SELECT 1
-     FROM channel_members
-     WHERE channel_id = $1 AND member_type = 'user' AND member_id = $2`,
-    [channelId, username],
-  );
+  const result = await db
+    .select({ id: channelMembers.id })
+    .from(channelMembers)
+    .where(
+      and(
+        eq(channelMembers.channelId, channelId),
+        eq(channelMembers.memberType, "user"),
+        eq(channelMembers.memberId, username),
+      ),
+    )
+    .limit(1);
 
-  return result.rows.length > 0;
+  return result.length > 0;
 }
 
 async function isChannelCreator(
@@ -68,14 +79,13 @@ async function isChannelCreator(
 ): Promise<boolean> {
   if (!channelId) return false;
 
-  const result = await query(
-    `SELECT 1
-     FROM channels
-     WHERE id = $1 AND created_by = $2`,
-    [channelId, username],
-  );
+  const result = await db
+    .select({ id: channels.id })
+    .from(channels)
+    .where(and(eq(channels.id, channelId), eq(channels.createdBy, username)))
+    .limit(1);
 
-  return result.rows.length > 0;
+  return result.length > 0;
 }
 
 async function getMessageOwner(
@@ -85,14 +95,17 @@ async function getMessageOwner(
   author_id: string;
   channel_id: string;
 } | null> {
-  const result = await query(
-    `SELECT author_type, author_id, channel_id
-     FROM messages
-     WHERE id = $1`,
-    [messageId],
-  );
+  const result = await db
+    .select({
+      author_type: messages.authorType,
+      author_id: messages.authorId,
+      channel_id: messages.channelId,
+    })
+    .from(messages)
+    .where(eq(messages.id, messageId))
+    .limit(1);
 
-  return result.rows[0] ?? null;
+  return result[0] ?? null;
 }
 
 async function getChannelMemberRow(memberRowId: string): Promise<{
@@ -100,14 +113,17 @@ async function getChannelMemberRow(memberRowId: string): Promise<{
   member_type: string;
   member_id: string;
 } | null> {
-  const result = await query(
-    `SELECT channel_id, member_type, member_id
-     FROM channel_members
-     WHERE id = $1`,
-    [memberRowId],
-  );
+  const result = await db
+    .select({
+      channel_id: channelMembers.channelId,
+      member_type: channelMembers.memberType,
+      member_id: channelMembers.memberId,
+    })
+    .from(channelMembers)
+    .where(eq(channelMembers.id, memberRowId))
+    .limit(1);
 
-  return result.rows[0] ?? null;
+  return result[0] ?? null;
 }
 
 function normalizeOpData(

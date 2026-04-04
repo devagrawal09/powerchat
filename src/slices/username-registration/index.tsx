@@ -1,5 +1,6 @@
+import { asc } from "drizzle-orm";
+import { clientDb, liveQuery, users } from "~/db/client";
 import { createSignal, Show } from "solid-js";
-import { usePowerSync } from "~/lib/powersync-solid";
 import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 
 type UserRow = {
@@ -9,15 +10,15 @@ type UserRow = {
 export function UsernameRegistration(props: {
   onSuccess: (username: string) => void;
 }) {
-  const powersync = usePowerSync();
   const [username, setUsername] = createSignal("");
   const [error, setError] = createSignal("");
   const [submitting, setSubmitting] = createSignal(false);
 
-  // Query existing users to check for duplicates
-  const existingUsers = useQuery<UserRow>(
-    () => `SELECT id FROM users`,
-    () => []
+  const existingUsers = useQuery(
+    () =>
+      liveQuery(
+        clientDb.select({ id: users.id }).from(users).orderBy(asc(users.id)),
+      ),
   );
 
   const handleSubmit = async (e: Event) => {
@@ -54,19 +55,9 @@ export function UsernameRegistration(props: {
     setSubmitting(true);
 
     try {
-      if (!powersync) {
-        setError("PowerSync not configured");
-        return;
-      }
-
       const now = new Date().toISOString();
 
-      await powersync.writeTransaction(async (tx) => {
-        await tx.execute(`INSERT INTO users (id, created_at) VALUES (?, ?)`, [
-          value,
-          now,
-        ]);
-      });
+      await clientDb.insert(users).values({ id: value, createdAt: now });
 
       // Set cookie
       document.cookie = `pc_username=${value}; path=/; max-age=${

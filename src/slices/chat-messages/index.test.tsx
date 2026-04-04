@@ -40,12 +40,6 @@ vi.mock("~/lib/powersync-solid/hooks/useQuery", () => ({
   })),
 }));
 
-vi.mock("~/lib/powersync-solid", () => ({
-  usePowerSync: vi.fn(() => ({
-    writeTransaction: vi.fn(),
-  })),
-}));
-
 vi.mock("~/components/Markdown", () => ({
   RenderMarkdown: (props: { children: string }) => (
     <span>{props.children}</span>
@@ -153,9 +147,8 @@ describe("ChatMessages", () => {
     expect(useQuery).toHaveBeenCalled();
     const call = vi.mocked(useQuery).mock.calls[0];
 
-    // Check that the query parameters function returns the correct channel ID
-    const paramsFunction = call[1];
-    expect(paramsFunction?.()).toEqual(["test-channel-123"]);
+    const compiled = (call[0]() as any).compile();
+    expect(compiled.parameters.at(-1)).toBe("test-channel-123");
   });
 
   it("orders messages by created_at and id", async () => {
@@ -165,10 +158,8 @@ describe("ChatMessages", () => {
 
     // Verify the SQL query includes ORDER BY clause
     const call = vi.mocked(useQuery).mock.calls[0];
-    const sqlFunction = call[0];
-    const sql = sqlFunction();
-
-    expect(sql).toContain("ORDER BY m.created_at ASC, m.id ASC");
+    const sql = (call[0]() as any).compile().sql;
+    expect(sql).toMatch(/order by .*created_at.*id/i);
   });
 
   it("includes author name resolution in query", async () => {
@@ -178,13 +169,12 @@ describe("ChatMessages", () => {
 
     // Verify the SQL query includes CASE statement for author name resolution
     const call = vi.mocked(useQuery).mock.calls[0];
-    const sqlFunction = call[0];
-    const sql = sqlFunction();
+    const sql = (call[0]() as any).compile().sql;
 
-    expect(sql).toContain("CASE");
-    expect(sql).toContain("WHEN m.author_type = 'user'");
-    expect(sql).toContain("WHEN m.author_type = 'agent'");
-    expect(sql).toContain("WHEN m.author_type = 'system'");
+    expect(sql).toMatch(/case/i);
+    expect(sql).toMatch(/author_type/i);
+    expect(sql).toMatch(/then .*users/i);
+    expect(sql).toMatch(/then .*agents/i);
   });
 
   it("renders markdown content", () => {

@@ -1,3 +1,5 @@
+import { eq } from "drizzle-orm";
+import { channels, clientDb, liveQuery } from "~/db/client";
 import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 
 type ChannelRow = {
@@ -12,9 +14,19 @@ type ChannelHeaderProps = {
 };
 
 export function ChannelHeader(props: ChannelHeaderProps) {
-  const channel = useQuery<ChannelRow>(
-    () => `SELECT * FROM channels WHERE id = ?`,
-    () => [props.channelId],
+  const channel = useQuery(
+    () =>
+      liveQuery(
+        clientDb
+          .select({
+            id: channels.id,
+            name: channels.name,
+            created_by: channels.createdBy,
+            created_at: channels.createdAt,
+          })
+          .from(channels)
+          .where(eq(channels.id, props.channelId)),
+      ),
   );
 
   const channelName = () => channel().data?.[0]?.name;

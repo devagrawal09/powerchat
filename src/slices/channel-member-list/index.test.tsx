@@ -3,21 +3,9 @@ import { render, screen } from "@solidjs/testing-library";
 import { ChannelMemberList } from "./index";
 
 vi.mock("~/lib/powersync-solid/hooks/useQuery", () => ({
-  useQuery: vi.fn((query) => () => {
-    if (query().includes("member_type = 'user'")) {
-      return {
-        data: [{ member_type: "user", member_id: "user1", name: "alice" }],
-        isLoading: false,
-      };
-    }
+  useQuery: vi.fn(() => () => {
     return {
-      data: [
-        {
-          member_type: "agent",
-          member_id: "00000000-0000-0000-0000-000000000001",
-          name: "Assistant",
-        },
-      ],
+      data: [{ member_type: "user", member_id: "user1", name: "alice" }],
       isLoading: false,
     };
   }),

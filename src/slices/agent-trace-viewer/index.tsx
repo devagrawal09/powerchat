@@ -1,23 +1,9 @@
+import { eq } from "drizzle-orm";
+import { agentRuns, agents, clientDb, liveQuery } from "~/db/client";
 import { Show, createEffect, createMemo } from "solid-js";
 import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 import { RenderMarkdown } from "~/components/Markdown";
 import { stopAgent } from "~/server/stop-agent";
-
-type AgentRunRow = {
-  id: string;
-  channel_id: string;
-  agent_id: string;
-  agent_message_id: string;
-  status: string;
-  trace: string;
-  error: string | null;
-  started_at: string;
-  completed_at: string | null;
-};
-
-type AgentRow = {
-  name: string;
-};
 
 type AgentTraceViewerProps = {
   runId: string;
@@ -27,22 +13,34 @@ type AgentTraceViewerProps = {
 export function AgentTraceViewer(props: AgentTraceViewerProps) {
   let scrollContainer: HTMLDivElement | undefined;
 
-  const run = useQuery<AgentRunRow>(
-    () =>
-      `SELECT id, channel_id, agent_id, agent_message_id, status, trace, error, started_at, completed_at
-       FROM agent_runs
-       WHERE id = ?`,
-    () => [props.runId],
+  const run = useQuery(() =>
+    liveQuery(
+      clientDb
+        .select({
+          id: agentRuns.id,
+          channel_id: agentRuns.channelId,
+          agent_id: agentRuns.agentId,
+          agent_message_id: agentRuns.agentMessageId,
+          status: agentRuns.status,
+          trace: agentRuns.trace,
+          error: agentRuns.error,
+          started_at: agentRuns.startedAt,
+          completed_at: agentRuns.completedAt,
+        })
+        .from(agentRuns)
+        .where(eq(agentRuns.id, props.runId)),
+    ),
   );
 
   const agentId = createMemo(() => run().data[0]?.agent_id);
 
-  const agent = useQuery<AgentRow>(
-    () =>
-      agentId()
-        ? `SELECT name FROM agents WHERE id = ?`
-        : `SELECT name FROM agents WHERE 1 = 0`,
-    () => (agentId() ? [agentId()!] : []),
+  const agent = useQuery(() =>
+    liveQuery(
+      clientDb
+        .select({ name: agents.name })
+        .from(agents)
+        .where(eq(agents.id, agentId() ?? "__missing__")),
+    ),
   );
 
   const agentName = () => agent().data[0]?.name || "Agent";
@@ -150,10 +148,7 @@ export function AgentTraceViewer(props: AgentTraceViewerProps) {
       </div>
 
       {/* Trace content */}
-      <div
-        ref={scrollContainer}
-        class="flex-1 overflow-y-auto p-4 bg-gray-50"
-      >
+      <div ref={scrollContainer} class="flex-1 overflow-y-auto p-4 bg-gray-50">
         <Show
           when={traceContent()}
           fallback={
@@ -205,8 +200,7 @@ export function AgentTraceViewer(props: AgentTraceViewerProps) {
             </div>
             <Show when={runData()!.completed_at}>
               <div>
-                Completed:{" "}
-                {new Date(runData()!.completed_at!).toLocaleString()}
+                Completed: {new Date(runData()!.completed_at!).toLocaleString()}
               </div>
             </Show>
           </div>

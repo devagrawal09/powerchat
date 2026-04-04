@@ -7,14 +7,18 @@ vi.mock("@solidjs/router", () => ({
   useNavigate: vi.fn(() => vi.fn()),
 }));
 
-const { mockWriteTransaction } = vi.hoisted(() => ({
-  mockWriteTransaction: vi.fn(),
+const { mockTransaction, mockInsertValues, mockInsert } = vi.hoisted(() => ({
+  mockInsertValues: vi.fn().mockResolvedValue(undefined),
+  mockInsert: vi.fn(() => ({ values: vi.fn().mockResolvedValue(undefined) })),
+  mockTransaction: vi.fn(),
 }));
 
-vi.mock("~/lib/powersync-solid", () => ({
-  usePowerSync: vi.fn(() => ({
-    writeTransaction: mockWriteTransaction,
-  })),
+vi.mock("~/db/client", () => ({
+  channelMembers: {},
+  channels: {},
+  clientDb: {
+    transaction: mockTransaction,
+  },
 }));
 
 vi.mock("~/lib/getUsername", () => ({
@@ -24,6 +28,10 @@ vi.mock("~/lib/getUsername", () => ({
 describe("CreateChannel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockInsert.mockReturnValue({ values: mockInsertValues });
+    mockTransaction.mockImplementation(async (cb: any) =>
+      cb({ insert: mockInsert }),
+    );
   });
 
   it("renders form with input and button", () => {
@@ -33,7 +41,7 @@ describe("CreateChannel", () => {
   });
 
   it("shows 'Creating...' while submitting", async () => {
-    mockWriteTransaction.mockImplementation(
+    mockTransaction.mockImplementation(
       () =>
         new Promise((resolve) => {
           setTimeout(resolve, 1000);
@@ -51,7 +59,7 @@ describe("CreateChannel", () => {
   });
 
   it("calls writeTransaction with correct data", async () => {
-    mockWriteTransaction.mockResolvedValue(undefined);
+    mockTransaction.mockResolvedValue(undefined);
 
     render(() => <CreateChannel />);
     const input = screen.getByPlaceholderText("New channel name");
@@ -63,11 +71,11 @@ describe("CreateChannel", () => {
     // Wait for async operations
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    expect(mockWriteTransaction).toHaveBeenCalled();
+    expect(mockTransaction).toHaveBeenCalled();
   });
 
   it("clears form after successful creation", async () => {
-    mockWriteTransaction.mockResolvedValue(undefined);
+    mockTransaction.mockResolvedValue(undefined);
 
     render(() => <CreateChannel />);
     const input = screen.getByPlaceholderText(
@@ -97,7 +105,7 @@ describe("CreateChannel", () => {
   });
 
   it("validates channel name before submission", async () => {
-    mockWriteTransaction.mockResolvedValue(undefined);
+    mockTransaction.mockResolvedValue(undefined);
 
     render(() => <CreateChannel />);
     const input = screen.getByPlaceholderText("New channel name");
@@ -110,6 +118,6 @@ describe("CreateChannel", () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     // writeTransaction should not be called for invalid input
-    expect(mockWriteTransaction).not.toHaveBeenCalled();
+    expect(mockTransaction).not.toHaveBeenCalled();
   });
 });
