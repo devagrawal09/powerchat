@@ -1,7 +1,6 @@
 "use server";
 import { Agent } from "@mastra/core/agent";
 import { query, queryInternal } from "./db";
-import { getWorkspace } from "./workspace";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 
@@ -179,8 +178,6 @@ export const processAgentResponse = async (
     const systemInstructions = agentInfo.rows[0]?.system_instructions || "";
     const agentDescription = agentInfo.rows[0]?.description || "";
 
-    const workspace = await getWorkspace(channelId);
-
     const messages = await query(
       `SELECT m.author_type, m.content,
         CASE
@@ -239,18 +236,22 @@ export const processAgentResponse = async (
       await completeRun("completed");
       await writeFile(
         logFile,
-        formatLogEntry(logContext, finalText, undefined, new Date().toISOString()),
+        formatLogEntry(
+          logContext,
+          finalText,
+          undefined,
+          new Date().toISOString(),
+        ),
       );
     } else {
       const abortController = new AbortController();
       activeRuns.set(agentRunId, abortController);
 
-      const workspaceTools = workspace.getTools();
       const agent = new Agent({
         name: agentName,
         instructions,
         model: process.env.AI_MODEL || defaultModel,
-        tools: workspaceTools,
+        id: "agent",
       });
 
       try {

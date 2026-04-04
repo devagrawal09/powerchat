@@ -1,13 +1,7 @@
 import { Show, createEffect } from "solid-js";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
-import { ChatMessages } from "~/slices/chat-messages";
-import { ChatInput } from "~/slices/chat-input";
 import { ChannelMemberList } from "~/slices/channel-member-list";
 import { ChannelAgentsList } from "~/slices/channel-agents-list";
-import { ChannelDocumentsList } from "~/slices/channel-documents-list";
-import { DocumentViewer } from "~/slices/document-viewer";
-import { AgentViewer } from "~/slices/agent-viewer";
-import { AgentTraceViewer } from "~/slices/agent-trace-viewer";
 import { ChannelInvite } from "~/slices/channel-invite";
 import { ChannelHeader } from "~/slices/channel-header";
 import { CreateAgent } from "~/slices/create-agent";
@@ -65,42 +59,6 @@ export default function ChannelPage() {
           <div class="flex-1 flex flex-col">
             {/* Header */}
             <ChannelHeader channelId={channelId()} />
-
-            <Show
-              when={filePath()}
-              fallback={
-                <Show
-                  when={agentId()}
-                  fallback={
-                    <Show
-                      when={traceRunId()}
-                      fallback={
-                        <>
-                          <ChatMessages channelId={channelId()} />
-                          <ChatInput channelId={channelId()} />
-                        </>
-                      }
-                    >
-                      <AgentTraceViewer
-                        runId={traceRunId()!}
-                        onClose={handleCloseTrace}
-                      />
-                    </Show>
-                  }
-                >
-                  <AgentViewer
-                    agentId={agentId()!}
-                    onClose={handleCloseAgent}
-                  />
-                </Show>
-              }
-            >
-              <DocumentViewer
-                channelId={channelId()}
-                filePath={filePath()!}
-                onClose={handleCloseDocument}
-              />
-            </Show>
           </div>
 
           {/* Right sidebar */}
@@ -111,10 +69,6 @@ export default function ChannelPage() {
                 channelId={channelId()}
                 onAgentClick={handleAgentClick}
                 onTraceClick={handleTraceClick}
-              />
-              <ChannelDocumentsList
-                channelId={channelId()}
-                onFileClick={handleDocumentClick}
               />
             </div>
             <CreateAgent channelId={channelId()} />

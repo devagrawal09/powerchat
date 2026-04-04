@@ -6,10 +6,8 @@ A real-time chat app with AI agents built with SolidStart, PowerSync, Neon, and 
 
 - 💬 Real-time chat channels
 - 🤖 AI agents you can @mention in channels
-- 📄 Document management - agents can create and manage markdown documents
-- 🔗 Document mentions - use #documentTitle to reference documents
-- 👥 Channel sidebar - view members, agents, and documents
-- 📖 Document viewer - click documents to view full content
+- 📄 Agent-authored documents stored in the database
+- 👥 Channel sidebar - view members and agents
 - 👤 Agent viewer - click agents to view their description and instructions
 - 📱 Offline-first with PowerSync local-first sync
 - ⚡ Instant UI updates via client-side writes
@@ -96,9 +94,8 @@ Visit `http://localhost:3000`
 2. **Invite an Agent**: Use the agent invite UI in a channel
 3. **Send Messages**: Type in the input box
 4. **Mention Agents**: Use `@AgentName` in your message to trigger AI reply
-5. **Mention Documents**: Use `#DocumentTitle` to reference documents
-6. **View Documents**: Click on documents in the right sidebar to view full content
-7. **View Agent Details**: Click on agents in the right sidebar to see their description and instructions
+5. **Mention Documents**: Use `#DocumentTitle` to reference stored documents in conversations
+6. **View Agent Details**: Click on agents in the right sidebar to see their description and instructions
 
 ## Architecture
 
@@ -121,7 +118,7 @@ Slices are categorized by their primary responsibility:
 
 - Fetch and display data
 - Use PowerSync `useWatchedQuery` for reactive data
-- Examples: `channel-list`, `chat-messages`, `username-check`, `channel-header`, `channel-member-list`, `channel-agents-list`, `channel-documents-list`, `document-viewer`, `agent-viewer`, `mention-autocomplete`
+- Examples: `channel-list`, `chat-messages`, `username-check`, `channel-header`, `channel-member-list`, `channel-agents-list`, `agent-viewer`, `mention-autocomplete`
 
 **Mutation Slices** (write operations):
 
@@ -214,12 +211,11 @@ bun test
 
 Agents can create, list, and read markdown documents within channels:
 
-- **Create Document**: Agents use `createDocument` tool to store long-form content
+- **Create Document**: Agents use `createDocument` to store long-form content
 - **List Documents**: Agents use `listDocuments` to see available documents
 - **Read Document**: Agents use `readDocument` to access document content
 - **Document Mentions**: Users and agents can reference documents with `#DocumentTitle`
-- **Document Viewer**: Click documents in sidebar to view full content (replaces chat view)
-- **Agent Instructions**: Agents are instructed to keep responses concise (2-4 sentences) and use documents for detailed information
+- **Current UI**: Documents are stored and can be referenced by agents, but the dedicated sidebar list and document viewer were removed from the app shell
 
 ### Key Files
 
@@ -228,10 +224,10 @@ Agents can create, list, and read markdown documents within channels:
 - `src/lib/useWatchedQuery.ts` - Hook for reactive PowerSync queries
 - `src/server/powersync.ts` - PowerSync JWT token generation (`getPowerSyncToken`) and upload handler (`uploadData`)
 - `src/server/db.ts` - Neon connection pool
-- `src/server/agent.ts` - Mastra agent execution with document tools and logging
+- `src/server/agent.ts` - Mastra agent execution and logging
 - `src/server/tools/documents.ts` - Document management tools for agents
 - `src/routes/(chat).tsx` - Layout with sidebar (orchestrates slices)
-- `src/routes/channel/[id].tsx` - Messages view with document/agent viewers (orchestrates slices)
+- `src/routes/channel/[id].tsx` - Channel shell with header and right sidebar (orchestrates slices)
 - `src/slices/` - All feature slices (query and mutation)
 - `logs/` - Agent interaction logs (plain text format, git-ignored)
 
@@ -242,6 +238,7 @@ Agents can create, list, and read markdown documents within channels:
 - No streaming (simple text replies)
 - In-memory idempotency (resets on server restart)
 - Documents can only be created by agents (no client-side uploads)
+- No dedicated document browsing/viewing UI
 - No document editing or deletion
 
 ## Next Steps
