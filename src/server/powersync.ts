@@ -6,6 +6,27 @@ import { getRequestEvent } from "solid-js/web";
 import { query } from "./db";
 import { UpdateType } from "@powersync/common";
 
+type UploadOperation = {
+  op: UpdateType;
+  table: string;
+  id: string;
+  opData: Record<string, any>;
+};
+
+type AuthorizedOperation = {
+  username: string;
+  id: string;
+  opType: UpdateType;
+  opData: Record<string, any>;
+};
+
+type TableConfig = {
+  columns: readonly string[];
+  canPut: (op: AuthorizedOperation) => Promise<boolean>;
+  canPatch: (op: AuthorizedOperation) => Promise<boolean>;
+  canDelete: (op: AuthorizedOperation) => Promise<boolean>;
+};
+
 // Helper to decode Base64URL safely
 function base64urlToBytes(b64url: string): Uint8Array {
   const b64 = b64url
@@ -15,13 +36,256 @@ function base64urlToBytes(b64url: string): Uint8Array {
   return new Uint8Array(Buffer.from(b64, "base64"));
 }
 
-// Token generation for PowerSync authentication
-export async function getPowerSyncToken() {
+function getRequestUsername(): string {
   const event = getRequestEvent();
   if (!event) throw new Error("No request event");
 
   const username = getCookie(event.nativeEvent, "pc_username");
   if (!username) throw new Error("No session");
+
+  return username;
+}
+
+async function isChannelMember(
+  channelId: string | undefined,
+  username: string,
+): Promise<boolean> {
+  if (!channelId) return false;
+
+  const result = await query(
+    `SELECT 1
+     FROM channel_members
+     WHERE channel_id = $1 AND member_type = 'user' AND member_id = $2`,
+    [channelId, username],
+  );
+
+  return result.rows.length > 0;
+}
+
+async function isChannelCreator(
+  channelId: string | undefined,
+  username: string,
+): Promise<boolean> {
+  if (!channelId) return false;
+
+  const result = await query(
+    `SELECT 1
+     FROM channels
+     WHERE id = $1 AND created_by = $2`,
+    [channelId, username],
+  );
+
+  return result.rows.length > 0;
+}
+
+async function getMessageOwner(
+  messageId: string,
+): Promise<{
+  author_type: string;
+  author_id: string;
+  channel_id: string;
+} | null> {
+  const result = await query(
+    `SELECT author_type, author_id, channel_id
+     FROM messages
+     WHERE id = $1`,
+    [messageId],
+  );
+
+  return result.rows[0] ?? null;
+}
+
+async function getChannelMemberRow(memberRowId: string): Promise<{
+  channel_id: string;
+  member_type: string;
+  member_id: string;
+} | null> {
+  const result = await query(
+    `SELECT channel_id, member_type, member_id
+     FROM channel_members
+     WHERE id = $1`,
+    [memberRowId],
+  );
+
+  return result.rows[0] ?? null;
+}
+
+function normalizeOpData(
+  id: string,
+  opData: Record<string, any> | null | undefined,
+) {
+  const normalized = { ...(opData ?? {}) };
+
+  if (normalized.id != null && normalized.id !== id) {
+    throw new Error("Payload id does not match operation id");
+  }
+
+  delete normalized.id;
+  return normalized;
+}
+
+function validateColumns(
+  table: string,
+  allowedColumns: readonly string[],
+  opData: Record<string, any>,
+) {
+  const allowed = new Set(allowedColumns);
+  const columns = Object.keys(opData);
+  const invalidColumns = columns.filter((column) => !allowed.has(column));
+
+  if (invalidColumns.length > 0) {
+    throw new Error(
+      `Invalid columns for ${table}: ${invalidColumns.join(", ")}`,
+    );
+  }
+
+  return columns;
+}
+
+function getOperationLabel(op: UpdateType): string {
+  switch (op) {
+    case UpdateType.PUT:
+      return "PUT";
+    case UpdateType.PATCH:
+      return "PATCH";
+    case UpdateType.DELETE:
+      return "DELETE";
+    default:
+      return String(op);
+  }
+}
+
+const TABLE_CONFIG: Record<string, TableConfig> = {
+  users: {
+    columns: ["created_at"],
+    canPut: async ({ username, id }) => username === id,
+    canPatch: async () => false,
+    canDelete: async () => false,
+  },
+  agents: {
+    columns: [
+      "name",
+      "model_config",
+      "system_instructions",
+      "description",
+      "created_at",
+    ],
+    canPut: async ({ username }) => Boolean(username),
+    canPatch: async () => false,
+    canDelete: async () => false,
+  },
+  channels: {
+    columns: ["name", "created_by", "created_at"],
+    canPut: async ({ username, opData }) => opData.created_by === username,
+    canPatch: async ({ username, id, opData }) => {
+      if ("created_by" in opData || "created_at" in opData) return false;
+      return isChannelCreator(id, username);
+    },
+    canDelete: async ({ username, id }) => isChannelCreator(id, username),
+  },
+  channel_members: {
+    columns: ["channel_id", "member_type", "member_id", "joined_at"],
+    canPut: async ({ username, opData }) => {
+      return isChannelMember(opData.channel_id, username);
+    },
+    canPatch: async () => false,
+    canDelete: async ({ username, id }) => {
+      const existing = await getChannelMemberRow(id);
+      if (!existing) return false;
+
+      if (existing.member_type === "user" && existing.member_id === username) {
+        return true;
+      }
+
+      return isChannelMember(existing.channel_id, username);
+    },
+  },
+  messages: {
+    columns: [
+      "channel_id",
+      "author_type",
+      "author_id",
+      "content",
+      "mentioned_agent",
+      "created_at",
+    ],
+    canPut: async ({ username, opData }) => {
+      if (opData.author_type !== "user") return false;
+      if (opData.author_id !== username) return false;
+      return isChannelMember(opData.channel_id, username);
+    },
+    canPatch: async ({ username, id, opData }) => {
+      if (
+        "channel_id" in opData ||
+        "author_type" in opData ||
+        "author_id" in opData ||
+        "created_at" in opData
+      ) {
+        return false;
+      }
+
+      const existing = await getMessageOwner(id);
+      return (
+        existing?.author_type === "user" && existing.author_id === username
+      );
+    },
+    canDelete: async ({ username, id }) => {
+      const existing = await getMessageOwner(id);
+      return (
+        existing?.author_type === "user" && existing.author_id === username
+      );
+    },
+  },
+};
+
+async function assertAuthorizedOperation(
+  username: string,
+  operation: UploadOperation,
+): Promise<{ opData: Record<string, any>; columns: string[] }> {
+  const config = TABLE_CONFIG[operation.table];
+  if (!config) {
+    throw new Error(`Table not writable: ${operation.table}`);
+  }
+
+  const opData = normalizeOpData(operation.id, operation.opData);
+  const columns = validateColumns(operation.table, config.columns, opData);
+  const authorizedOperation: AuthorizedOperation = {
+    username,
+    id: operation.id,
+    opType: operation.op,
+    opData,
+  };
+
+  let allowed = false;
+  switch (operation.op) {
+    case UpdateType.PUT:
+      allowed = await config.canPut(authorizedOperation);
+      break;
+    case UpdateType.PATCH:
+      if (columns.length === 0) {
+        throw new Error("PATCH requires at least one writable column");
+      }
+      allowed = await config.canPatch(authorizedOperation);
+      break;
+    case UpdateType.DELETE:
+      allowed = await config.canDelete(authorizedOperation);
+      break;
+    default:
+      throw new Error(`Unsupported operation: ${operation.op}`);
+  }
+
+  if (!allowed) {
+    throw new Error(
+      `Unauthorized ${getOperationLabel(operation.op)} on ${operation.table}`,
+    );
+  }
+
+  return { opData, columns };
+}
+
+// Token generation for PowerSync authentication
+export async function getPowerSyncToken() {
+  const username = getRequestUsername();
 
   const kid = process.env.POWERSYNC_JWT_KID;
   const secretB64url = process.env.POWERSYNC_JWT_SECRET;
@@ -46,27 +310,24 @@ export async function getPowerSyncToken() {
 }
 
 // Upload data from PowerSync client to Neon
-export async function uploadData(
-  transactions: {
-    op: UpdateType;
-    table: string;
-    id: string;
-    opData: Record<string, any>;
-  }[],
-) {
+export async function uploadData(transactions: UploadOperation[]) {
   console.log("[uploadData] transactions", transactions.length);
 
   try {
+    const username = getRequestUsername();
+
     // Process synchronously - DO NOT queue for later per PowerSync docs
     for (const op of transactions) {
-      const { op: opType, table: tableName, id, opData } = op;
+      const { op: opType, table: tableName, id } = op;
+      const { opData, columns } = await assertAuthorizedOperation(username, op);
 
       switch (opType) {
         case UpdateType.PUT:
-          // INSERT or UPSERT (create new row)
-          if (!opData) throw new Error("PUT requires data");
-          // Filter out 'id' from opData since it's already provided separately
-          const putCols = Object.keys(opData).filter((k) => k !== "id");
+          if (columns.length === 0) {
+            throw new Error("PUT requires at least one writable column");
+          }
+
+          const putCols = columns;
           const putVals = putCols.map((k) => opData[k]);
           await query(
             `INSERT INTO ${tableName} (id, ${putCols.join(", ")})
@@ -78,12 +339,8 @@ export async function uploadData(
           break;
 
         case UpdateType.PATCH:
-          // UPDATE existing row
-          if (!opData) throw new Error("PATCH requires data");
-          // Filter out 'id' from opData since it's already provided separately
-          const patchCols = Object.keys(opData).filter((k) => k !== "id");
+          const patchCols = columns;
           const patchVals = patchCols.map((k) => opData[k]);
-          if (!patchCols.length) break;
           await query(
             `UPDATE ${tableName}
              SET ${patchCols.map((k, i) => `${k} = $${i + 1}`).join(", ")}
