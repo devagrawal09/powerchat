@@ -1,3 +1,5 @@
+import { eq } from "drizzle-orm";
+import { channels, clientDb, liveQuery } from "~/db/client";
 import { Show, createEffect } from "solid-js";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import { ChannelMemberList } from "~/slices/channel-member-list";
@@ -5,19 +7,29 @@ import { ChannelAgentsList } from "~/slices/channel-agents-list";
 import { ChannelInvite } from "~/slices/channel-invite";
 import { ChannelHeader } from "~/slices/channel-header";
 import { CreateAgent } from "~/slices/create-agent";
+import { ChatMessages } from "~/slices/chat-messages";
+import { ChatInput } from "~/slices/chat-input";
+import { AgentViewer } from "~/slices/agent-viewer";
+import { AgentTraceViewer } from "~/slices/agent-trace-viewer";
 import { useQuery } from "~/lib/powersync-solid";
 
 export default function ChannelPage() {
   const params = useParams();
+  const channelIdParam = () => params.id ?? "";
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const filePath = () => searchParams.doc as string | undefined;
   const agentId = () => searchParams.agent as string | undefined;
   const traceRunId = () => searchParams.trace as string | undefined;
 
-  const channel = useQuery<{ id: string }>(
-    () => `SELECT id FROM channels WHERE id = ?`,
-    () => [params.id],
+  const channel = useQuery(
+    () =>
+      liveQuery(
+        clientDb
+          .select({ id: channels.id })
+          .from(channels)
+          .where(eq(channels.id, channelIdParam())),
+      ),
   );
 
   createEffect(() => {
@@ -52,13 +64,44 @@ export default function ChannelPage() {
     setSearchParams({ trace: undefined });
   };
 
+  const activePanel = () => {
+    if (traceRunId()) return "trace";
+    if (agentId()) return "agent";
+    return "chat";
+  };
+
   return (
     <Show when={params.id}>
       {(channelId) => (
         <div class="flex-1 flex h-full">
-          <div class="flex-1 flex flex-col">
-            {/* Header */}
-            <ChannelHeader channelId={channelId()} />
+          <div class="flex-1 flex min-w-0">
+            <div class="flex-1 flex flex-col min-w-0">
+              <ChannelHeader channelId={channelId()} />
+
+              <div class="flex-1 flex flex-col min-h-0">
+                <ChatMessages channelId={channelId()} />
+                <ChatInput channelId={channelId()} channelName={filePath()} />
+              </div>
+            </div>
+
+            <Show when={activePanel() !== "chat"}>
+              <div class="w-96 border-l border-gray-200 bg-white min-w-0">
+                <Show when={activePanel() === "agent" && agentId()}>
+                  {(id) => (
+                    <AgentViewer agentId={id()} onClose={handleCloseAgent} />
+                  )}
+                </Show>
+
+                <Show when={activePanel() === "trace" && traceRunId()}>
+                  {(runId) => (
+                    <AgentTraceViewer
+                      runId={runId()}
+                      onClose={handleCloseTrace}
+                    />
+                  )}
+                </Show>
+              </div>
+            </Show>
           </div>
 
           {/* Right sidebar */}
