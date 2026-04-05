@@ -31,23 +31,38 @@ bun install
 
 ### 2. Database Setup
 
-The database has already been created and seeded via Neon MCP:
+This app expects a Postgres database with the chat schema already created.
 
-- Project: `powerchat` (ID: `morning-tree-55202603`)
-- Database: `neondb`
-- Tables: `users`, `agents`, `channels`, `channel_members`, `messages`, `documents`, `agent_runs`
-- Demo agents: `Assistant`, `Analyst`, `Researcher`, `Writer`
+- Tables used by the app: `users`, `agents`, `channels`, `channel_members`, `messages`, `documents`, `agent_runs`
+- Seed/demo agents commonly used in development: `Assistant`, `Analyst`, `Researcher`, `Writer`
 
-Connection string should be set in `.env.local` (see Environment Variables section below).
+Set `NEON_DATABASE_URL` in `.env.local` (see Environment Variables below).
 
-### 3. Configure PowerSync Service
+### 3. Configure PowerSync
 
-PowerSync setup instructions are in `db/replication.sql`. You need to:
+PowerSync setup is split across a few files:
+
+- `db/replication.sql` - SQL for the Postgres replication role and publication
+- `powersync/service.yaml` - PowerSync service connection config
+- `powersync/sync-config.yaml` - sync rules used by the app
+- `powersync/cli.yaml` - PowerSync CLI project link metadata
+
+You need to:
 
 - Enable logical replication in Neon
-- Create a replication role for PowerSync Service
-- Connect PowerSync Service to your Neon database
-- Configure sync rules to filter by user membership
+- Run the SQL in `db/replication.sql`
+- Configure the PowerSync service connection in `powersync/service.yaml`
+- Deploy the sync rules from `powersync/sync-config.yaml`
+
+The current sync rules subscribe each user to channels where they are a member and sync:
+
+- `users`
+- `agents`
+- `channels`
+- `channel_members`
+- `messages`
+- `documents`
+- `agent_runs`
 
 ### 4. Environment Variables
 
@@ -58,16 +73,28 @@ NEON_DATABASE_URL="postgresql://..."
 POWERSYNC_SERVICE_URL=https://your-instance.powersync.com
 POWERSYNC_JWT_SECRET=your-secret-min-32-chars
 POWERSYNC_JWT_KID=your-key-id
+POWERSYNC_SERVER_TOKEN=your-service-token
 OPENAI_API_KEY=sk-your-key
 AI_MODEL=gpt-5
 ```
 
-**Note**: `POWERSYNC_JWT_SECRET` should be a Base64URL-encoded secret (minimum 32 characters). `POWERSYNC_JWT_KID` is the key ID used in the JWT header.
+**Notes**:
+
+- `POWERSYNC_JWT_SECRET` should be a Base64URL-encoded secret.
+- `POWERSYNC_JWT_KID` is the key ID used in the JWT header.
+- `POWERSYNC_SERVER_TOKEN` is required for the server-side PowerSync subscription that watches new user messages and triggers agent runs.
 
 Also add for client (Vite):
 
 ```bash
 VITE_POWERSYNC_SERVICE_URL=https://your-instance.powersync.com
+```
+
+Optional variables supported by the repo:
+
+```bash
+ANTHROPIC_API_KEY=
+FIRECRAWL_API_KEY=
 ```
 
 ### 5. Run Development Server
@@ -76,15 +103,11 @@ VITE_POWERSYNC_SERVICE_URL=https://your-instance.powersync.com
 bun dev
 ```
 
-### Mock LLM Mode
-
-Run the app without external model calls:
+### 6. Run Tests
 
 ```bash
-bun run dev:mock
+bun test
 ```
-
-This sets `MOCK_LLM=1` so agents respond with deterministic mock replies.
 
 Visit `http://localhost:3000`
 
@@ -105,10 +128,10 @@ PowerChat uses **vertical slice architecture** to organize features by domain ra
 
 #### Slice Structure
 
-Every slice lives in `src/slices/{feature-name}/` and contains:
+Every slice lives in `src/slices/{feature-name}/` and typically contains:
 
 - `index.tsx` - The component/hook implementation
-- `index.test.tsx` - Test file (see Testing below)
+- `index.test.tsx` - Test file when present (see Testing below)
 
 #### Query vs Mutation Slices
 
@@ -117,8 +140,8 @@ Slices are categorized by their primary responsibility:
 **Query Slices** (read-only):
 
 - Fetch and display data
-- Use PowerSync `useWatchedQuery` for reactive data
-- Examples: `channel-list`, `chat-messages`, `username-check`, `channel-header`, `channel-member-list`, `channel-agents-list`, `agent-viewer`, `mention-autocomplete`
+- Use `useQuery` from `~/lib/powersync-solid` for reactive local queries
+- Examples: `channel-list`, `chat-messages`, `username-check`, `channel-header`, `channel-member-list`, `channel-agents-list`, `agent-viewer`, `agent-trace-viewer`, `mention-autocomplete`
 
 **Mutation Slices** (write operations):
 
@@ -156,7 +179,7 @@ export default function ChatLayout() {
 
 ### Testing
 
-Every slice **must** have a test file (`index.test.tsx`). Tests can be simple but should verify basic functionality:
+Most slices should have a colocated test file (`index.test.tsx`). Tests can be simple but should verify basic functionality:
 
 - **Query slices**: Test that data renders correctly, loading states work, and empty states are handled
 - **Mutation slices**: Test that user interactions trigger the correct mutations and callbacks
@@ -171,8 +194,8 @@ import { render, screen } from "@solidjs/testing-library";
 import { MySlice } from "./index";
 
 // Mock dependencies
-vi.mock("~/lib/useWatchedQuery", () => ({
-  useWatchedQuery: vi.fn(() => ({ data: [], loading: false })),
+vi.mock("~/lib/powersync-solid", () => ({
+  useQuery: vi.fn(() => ({ data: [], isLoading: false })),
 }));
 
 describe("MySlice", () => {
@@ -198,7 +221,7 @@ bun test
 - **Keep tests simple** - Focus on basic functionality, not edge cases
 - **Mock external dependencies** - Mock PowerSync queries, server actions, etc.
 - **Test behavior, not implementation** - Verify what users see and experience
-- **Every slice gets a test** - Even if it's just a few basic assertions
+- **Prefer colocated slice tests** - Keep tests close to the slice and cover the primary behavior
 
 ### Client-First Mutations
 
@@ -206,51 +229,3 @@ bun test
 - PowerSync queues uploads to the service
 - Server confirms writes
 - Replies sync back automatically
-
-### Document Management
-
-Agents can create, list, and read markdown documents within channels:
-
-- **Create Document**: Agents use `createDocument` to store long-form content
-- **List Documents**: Agents use `listDocuments` to see available documents
-- **Read Document**: Agents use `readDocument` to access document content
-- **Document Mentions**: Users and agents can reference documents with `#DocumentTitle`
-- **Current UI**: Documents are stored and can be referenced by agents, but the dedicated sidebar list and document viewer were removed from the app shell
-
-### Key Files
-
-- `src/middleware.ts` - Sets anonymous user cookie
-- `src/lib/powersync.ts` - PowerSync client + schema
-- `src/lib/useWatchedQuery.ts` - Hook for reactive PowerSync queries
-- `src/server/powersync.ts` - PowerSync JWT token generation (`getPowerSyncToken`) and upload handler (`uploadData`)
-- `src/server/db.ts` - Neon connection pool
-- `src/server/agent.ts` - Mastra agent execution and logging
-- `src/server/tools/documents.ts` - Document management tools for agents
-- `src/routes/(chat).tsx` - Layout with sidebar (orchestrates slices)
-- `src/routes/channel/[id].tsx` - Channel shell with header and right sidebar (orchestrates slices)
-- `src/slices/` - All feature slices (query and mutation)
-- `logs/` - Agent interaction logs (plain text format, git-ignored)
-
-## MVP Limitations
-
-- No server-side validation of mentions/membership
-- Anonymous users only (no proper auth)
-- No streaming (simple text replies)
-- In-memory idempotency (resets on server restart)
-- Documents can only be created by agents (no client-side uploads)
-- No dedicated document browsing/viewing UI
-- No document editing or deletion
-
-## Next Steps
-
-- Add user/agent invite UI
-- Server-side membership validation
-- Streaming agent responses
-- Rate limiting
-- Persistent idempotency via DB
-- Display names/avatars
-- Rich message formatting
-- Typing indicators
-- Document editing and deletion
-- Client-side document creation
-- Document search and filtering

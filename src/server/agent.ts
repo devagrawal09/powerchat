@@ -125,16 +125,6 @@ const applyFinalTextEvent = (acc: string, ev: any): string => {
   }
 };
 
-const buildMockResponse = (
-  agentName: string,
-  userMessage: string,
-  triggeringUsername: string,
-) => {
-  const mention = triggeringUsername ? `@${triggeringUsername} ` : "";
-  const snippet = userMessage.trim().slice(0, 200);
-  return `${mention}${agentName} (mock): ${snippet || "Hello"}.`;
-};
-
 // Global registry of active agent run abort controllers
 const activeRuns = new Map<string, AbortController>();
 
@@ -252,111 +242,92 @@ export const processAgentResponse = async (
 
     let trace = "";
     let finalText = "";
-    const mock =
-      process.env.MOCK_LLM === "1" || process.env.AI_MODEL === "mock";
-    if (mock) {
-      finalText = buildMockResponse(agentName, userMessage, triggeringUsername);
-      trace = finalText;
-      await updateMessage(finalText);
-      await updateTrace(trace);
-      await completeRun("completed");
-      await writeFile(
-        logFile,
-        formatLogEntry(
-          logContext,
-          finalText,
-          undefined,
-          new Date().toISOString(),
-        ),
-      );
-    } else {
-      const abortController = new AbortController();
-      activeRuns.set(agentRunId, abortController);
+    const abortController = new AbortController();
+    activeRuns.set(agentRunId, abortController);
 
-      const agent = new Agent({
-        name: agentName,
-        instructions,
-        model: process.env.AI_MODEL || defaultModel,
-        id: "agent",
+    const agent = new Agent({
+      name: agentName,
+      instructions,
+      model: process.env.AI_MODEL || defaultModel,
+      id: "agent",
+    });
+
+    try {
+      const stream = await agent.stream(input, {
+        abortSignal: abortController.signal,
       });
 
-      try {
-        const stream = await agent.stream(input, {
-          abortSignal: abortController.signal,
-        });
+      let traceUpdatePending = false;
 
-        let traceUpdatePending = false;
-
-        for await (const ev of stream.fullStream) {
-          if (abortController.signal.aborted) {
-            break;
-          }
-
-          // Build trace (all events)
-          const traceLine = buildTraceLine(ev);
-          if (traceLine) {
-            trace += traceLine;
-            // Batch trace updates - don't write every single delta
-            if (!traceUpdatePending) {
-              traceUpdatePending = true;
-              setTimeout(async () => {
-                traceUpdatePending = false;
-                await updateTrace(trace).catch(() => {});
-              }, 300);
-            }
-          }
-
-          // Build final text (only text deltas, no tool calls)
-          finalText = applyFinalTextEvent(finalText, ev);
-
-          // Update message with "Thinking..." while tools are being used,
-          // or with partial final text if we have some
-          if (finalText.trim()) {
-            await updateMessage(finalText);
-          }
-        }
-
-        // Final trace flush
-        await updateTrace(trace);
-
+      for await (const ev of stream.fullStream) {
         if (abortController.signal.aborted) {
-          await updateMessage(finalText.trim() || "*(Agent stopped)*");
-          await completeRun("stopped");
-        } else {
-          await updateMessage(finalText.trim() || "*(No response)*");
-          await completeRun("completed");
+          break;
         }
-      } catch (streamError: any) {
-        if (streamError.name === "AbortError") {
-          await updateMessage(finalText.trim() || "*(Agent stopped)*");
-          await completeRun("stopped");
-        } else {
-          finalText += `\n\n[Error: ${
-            streamError.message || "Stream processing failed"
-          }]`;
+
+        // Build trace (all events)
+        const traceLine = buildTraceLine(ev);
+        if (traceLine) {
+          trace += traceLine;
+          // Batch trace updates - don't write every single delta
+          if (!traceUpdatePending) {
+            traceUpdatePending = true;
+            setTimeout(async () => {
+              traceUpdatePending = false;
+              await updateTrace(trace).catch(() => {});
+            }, 300);
+          }
+        }
+
+        // Build final text (only text deltas, no tool calls)
+        finalText = applyFinalTextEvent(finalText, ev);
+
+        // Update message with "Thinking..." while tools are being used,
+        // or with partial final text if we have some
+        if (finalText.trim()) {
           await updateMessage(finalText);
-          await updateTrace(trace + `\n\n[Error: ${streamError.message}]`);
-          await completeRun("error", streamError.message);
-          await writeFile(
-            logFile,
-            formatLogEntry(
-              logContext,
-              trace,
-              streamError.message,
-              new Date().toISOString(),
-            ),
-          );
-          throw streamError;
         }
-      } finally {
-        activeRuns.delete(agentRunId);
       }
 
-      await writeFile(
-        logFile,
-        formatLogEntry(logContext, trace, undefined, new Date().toISOString()),
-      );
+      // Final trace flush
+      await updateTrace(trace);
+
+      if (abortController.signal.aborted) {
+        await updateMessage(finalText.trim() || "*(Agent stopped)*");
+        await completeRun("stopped");
+      } else {
+        await updateMessage(finalText.trim() || "*(No response)*");
+        await completeRun("completed");
+      }
+    } catch (streamError: any) {
+      if (streamError.name === "AbortError") {
+        await updateMessage(finalText.trim() || "*(Agent stopped)*");
+        await completeRun("stopped");
+      } else {
+        finalText += `\n\n[Error: ${
+          streamError.message || "Stream processing failed"
+        }]`;
+        await updateMessage(finalText);
+        await updateTrace(trace + `\n\n[Error: ${streamError.message}]`);
+        await completeRun("error", streamError.message);
+        await writeFile(
+          logFile,
+          formatLogEntry(
+            logContext,
+            trace,
+            streamError.message,
+            new Date().toISOString(),
+          ),
+        );
+        throw streamError;
+      }
+    } finally {
+      activeRuns.delete(agentRunId);
     }
+
+    await writeFile(
+      logFile,
+      formatLogEntry(logContext, trace, undefined, new Date().toISOString()),
+    );
 
     return { success: true, agentMessageId };
   } catch (error: any) {
