@@ -82,7 +82,6 @@ AI_MODEL=gpt-5
 
 - `POWERSYNC_JWT_SECRET` should be a Base64URL-encoded secret.
 - `POWERSYNC_JWT_KID` is the key ID used in the JWT header.
-- `POWERSYNC_SERVER_TOKEN` is no longer required.
 
 Also add for client (Vite):
 
