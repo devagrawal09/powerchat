@@ -11,9 +11,9 @@ import {
   type PowerSyncSQLiteDatabase,
 } from "@powersync/drizzle-driver";
 import {
-  getPowerSyncToken,
   uploadData as uploadToServer,
 } from "~/server/powersync";
+import { getPowerSyncToken } from "~/server/powersync-token";
 import { clientSchema } from "~/db/schema/client";
 
 const isTestEnv =

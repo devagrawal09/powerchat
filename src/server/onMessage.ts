@@ -106,14 +106,19 @@ export async function onMessage(message: MessageRow): Promise<void> {
  * Resolve agent from structured metadata field.
  * Validates that the agent is active and a member of the channel.
  */
-async function resolveAgentFromMetadata(message: MessageRow): Promise<string[]> {
+async function resolveAgentFromMetadata(
+  message: MessageRow,
+): Promise<string[]> {
   if (!message.mentioned_agent) return [];
 
   let parsed: MentionedAgent;
   try {
     parsed = JSON.parse(message.mentioned_agent);
   } catch {
-    console.warn("[onMessage] invalid mentioned_agent JSON", message.mentioned_agent);
+    console.warn(
+      "[onMessage] invalid mentioned_agent JSON",
+      message.mentioned_agent,
+    );
     return [];
   }
 
@@ -136,7 +141,10 @@ async function resolveAgentFromMetadata(message: MessageRow): Promise<string[]> 
     .limit(1);
 
   if (!result.length) {
-    console.warn("[onMessage] mentioned agent not found or not in channel", parsed);
+    console.warn(
+      "[onMessage] mentioned agent not found or not in channel",
+      parsed,
+    );
     return [];
   }
 
@@ -147,11 +155,16 @@ async function resolveAgentFromMetadata(message: MessageRow): Promise<string[]> 
  * Fallback: parse @mentions from message text.
  * Used for backward compatibility with messages that lack metadata.
  */
-async function resolveAgentsFromText(content: string, channelId: string): Promise<string[]> {
+async function resolveAgentsFromText(
+  content: string,
+  channelId: string,
+): Promise<string[]> {
   const mentionedNames = Array.from(content.matchAll(/@([a-z0-9_]+)/gi)).map(
     (match) => match[1].toLowerCase(),
   );
-  console.log("[onMessage] fallback text parsing", { mentions: mentionedNames });
+  console.log("[onMessage] fallback text parsing", {
+    mentions: mentionedNames,
+  });
 
   if (mentionedNames.length === 0) return [];
 
@@ -165,7 +178,9 @@ async function resolveAgentsFromText(content: string, channelId: string): Promis
     .where(
       and(
         eq(channelMembers.channelId, channelId),
-        or(...mentionedNames.map((name) => sql`lower(${agents.name}) = ${name}`)),
+        or(
+          ...mentionedNames.map((name) => sql`lower(${agents.name}) = ${name}`),
+        ),
       ),
     )
     .orderBy(agents.name);

@@ -20,17 +20,3 @@ export const db = drizzle({
   client: getPool(),
   schema: serverSchema,
 });
-
-export async function queryInternal(text: string, params?: unknown[]) {
-  const client = await getPool().connect();
-  try {
-    return await client.query(text, params);
-  } finally {
-    client.release();
-  }
-}
-
-export async function query(text: string, params?: unknown[]) {
-  "use server";
-  return queryInternal(text, params);
-}

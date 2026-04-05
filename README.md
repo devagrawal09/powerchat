@@ -6,6 +6,7 @@ A real-time chat app with AI agents built with SolidStart, PowerSync, Neon, and 
 
 - 💬 Real-time chat channels
 - 🤖 AI agents you can @mention in channels
+- ✨ Agent runs are triggered directly from message upload handling
 - 👥 Channel sidebar - view members and agents
 - 👤 Agent viewer - click agents to view their description and instructions
 - 📱 Offline-first with PowerSync local-first sync
@@ -73,7 +74,6 @@ NEON_DATABASE_URL="postgresql://..."
 POWERSYNC_SERVICE_URL=https://your-instance.powersync.com
 POWERSYNC_JWT_SECRET=your-secret-min-32-chars
 POWERSYNC_JWT_KID=your-key-id
-POWERSYNC_SERVER_TOKEN=your-service-token
 OPENAI_API_KEY=sk-your-key
 AI_MODEL=gpt-5
 ```
@@ -82,7 +82,7 @@ AI_MODEL=gpt-5
 
 - `POWERSYNC_JWT_SECRET` should be a Base64URL-encoded secret.
 - `POWERSYNC_JWT_KID` is the key ID used in the JWT header.
-- `POWERSYNC_SERVER_TOKEN` is required for the server-side PowerSync subscription that watches new user messages and triggers agent runs.
+- `POWERSYNC_SERVER_TOKEN` is no longer required.
 
 Also add for client (Vite):
 
@@ -106,7 +106,7 @@ bun dev
 ### 6. Run Tests
 
 ```bash
-bun test
+bun run test
 ```
 
 Visit `http://localhost:3000`
@@ -117,6 +117,7 @@ Visit `http://localhost:3000`
 2. **Invite an Agent**: Use the agent invite UI in a channel
 3. **Send Messages**: Type in the input box
 4. **Mention Agents**: Use `@AgentName` in your message to trigger AI reply
+   Agent execution starts after the message upload reaches the server, without blocking the client upload response.
 5. **View Agent Details**: Click on agents in the right sidebar to see their description and instructions
 
 ## Architecture
@@ -226,5 +227,7 @@ bun test
 
 - Messages are written to local PowerSync SQLite DB instantly
 - PowerSync queues uploads to the service
-- Server confirms writes
+- The upload handler writes validated mutations to Postgres with Drizzle
+- New user messages trigger agent runs from the upload path instead of a separate DB listener
+- Agent placeholder messages appear quickly, then streamed agent text is persisted in batches of roughly 20 chunks or on newline boundaries
 - Replies sync back automatically

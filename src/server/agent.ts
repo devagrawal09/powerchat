@@ -2,12 +2,7 @@
 
 import { Agent } from "@mastra/core/agent";
 import { and, asc, eq, sql } from "drizzle-orm";
-import {
-  agentRuns,
-  agents,
-  messages,
-  users,
-} from "~/db/schema/server";
+import { agentRuns, agents, messages, users } from "~/db/schema/server";
 import { db } from "./db";
 
 const defaultModel = "openrouter/anthropic/claude-haiku-4.5";
@@ -93,7 +88,11 @@ async function loadChannelHistory(channelId: string) {
     .limit(30);
 }
 
-function createAgentInput(channelId: string, history: MessageHistoryRow[], userMessage: string) {
+function createAgentInput(
+  channelId: string,
+  history: MessageHistoryRow[],
+  userMessage: string,
+) {
   return `Channel: ${channelId}\n${buildHistory(history)}\nUser: ${userMessage}`;
 }
 
@@ -119,22 +118,40 @@ async function completeAgentRun(
     .where(eq(agentRuns.id, agentRunId));
 }
 
-async function streamAgentText(agent: Agent, input: string, onText: (text: string) => Promise<void>) {
+async function streamAgentText(
+  agent: Agent,
+  input: string,
+  onText: (text: string) => Promise<void>,
+) {
   const stream = await agent.stream(input);
   let finalText = "";
+  let chunksSinceFlush = 0;
+  let lastFlushedText = "";
+
+  async function flushIfNeeded(force = false) {
+    if (!finalText.trim()) return;
+    if (!force && chunksSinceFlush < 20 && !finalText.endsWith("\n")) return;
+    if (finalText === lastFlushedText) return;
+
+    await onText(finalText);
+    lastFlushedText = finalText;
+    chunksSinceFlush = 0;
+  }
 
   for await (const event of stream.fullStream) {
     if (event?.type === "text-delta") {
       finalText += event.payload?.text ?? "";
-      if (finalText.trim()) {
-        await onText(finalText);
-      }
+      chunksSinceFlush += 1;
+      await flushIfNeeded();
     }
 
     if (event?.type === "text-end" || event?.type === "step-finish") {
       finalText += "\n\n";
+      await flushIfNeeded();
     }
   }
+
+  await flushIfNeeded(true);
 
   return finalText.trim() || "*(No response)*";
 }
@@ -166,9 +183,13 @@ export async function processAgentResponse(
       model: process.env.AI_MODEL || defaultModel,
     });
 
-    const finalText = await streamAgentText(agent, input, async (partialText) => {
-      await updateAgentMessage(agentMessageId, partialText);
-    });
+    const finalText = await streamAgentText(
+      agent,
+      input,
+      async (partialText) => {
+        await updateAgentMessage(agentMessageId, partialText);
+      },
+    );
 
     await updateAgentMessage(agentMessageId, finalText);
     await completeAgentRun(agentRunId, "completed");
