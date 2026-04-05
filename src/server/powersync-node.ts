@@ -5,10 +5,9 @@ import {
   createBaseLogger,
   LogLevel,
 } from "@powersync/node";
-import { DrizzleAppSchema } from "@powersync/drizzle-driver";
 import { mkdir } from "fs/promises";
 import { join } from "path";
-import { clientSchema } from "~/db/schema/client";
+import { powerSyncSchema } from "~/db/schema/powersync";
 
 class PowerChatServerConnector implements PowerSyncBackendConnector {
   async fetchCredentials() {
@@ -43,8 +42,6 @@ class PowerChatServerConnector implements PowerSyncBackendConnector {
 const logger = createBaseLogger();
 logger.setLevel(LogLevel.INFO);
 
-const schema = new DrizzleAppSchema(clientSchema);
-
 let db: PowerSyncDatabase | null = null;
 let initPromise: Promise<PowerSyncDatabase> | null = null;
 
@@ -73,7 +70,7 @@ export async function getPowerSyncNode(): Promise<PowerSyncDatabase> {
     console.log("[powersync-node] initializing", { dbLocation, dbFilename });
 
     const database = new PowerSyncDatabase({
-      schema,
+      schema: powerSyncSchema,
       database: { dbFilename, dbLocation },
       logger,
     });

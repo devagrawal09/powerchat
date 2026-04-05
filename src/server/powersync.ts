@@ -202,7 +202,10 @@ const TABLE_CONFIG: Record<string, TableConfig> = {
   channel_members: {
     columns: ["channel_id", "member_type", "member_id", "joined_at"],
     canPut: async ({ username, opData }) => {
-      return isChannelMember(opData.channel_id, username);
+      return (
+        (await isChannelMember(opData.channel_id, username)) ||
+        (await isChannelCreator(opData.channel_id, username))
+      );
     },
     canPatch: async () => false,
     canDelete: async ({ username, id }) => {
