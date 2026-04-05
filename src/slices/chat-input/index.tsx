@@ -1,32 +1,19 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import {
   agents,
   channelMembers,
   clientDb,
-  documents as documentsTable,
   liveQuery,
   messages,
   users,
 } from "~/db/client";
-import { createSignal, createMemo } from "solid-js";
+import { createMemo, createSignal } from "solid-js";
 import { getUsername } from "~/lib/getUsername";
 import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 import {
   MentionAutocomplete,
   type MentionOption,
 } from "~/slices/mention-autocomplete";
-
-type MemberRow = {
-  member_type: string;
-  member_id: string;
-  name: string | null;
-};
-
-type DocumentRow = {
-  id: string;
-  title: string;
-  description: string;
-};
 
 type SelectedAgent = {
   id: string;
@@ -45,6 +32,7 @@ export function ChatInput(props: ChatInputProps) {
   const [selectedAgent, setSelectedAgent] = createSignal<SelectedAgent | null>(
     null,
   );
+
   const memberName = sql<string>`
     case
       when ${channelMembers.memberType} = 'user' then coalesce(${users.id}, ${channelMembers.memberId})
@@ -53,43 +41,17 @@ export function ChatInput(props: ChatInputProps) {
     end
   `;
 
-  // Detect mention query from content (@ for members)
   const mentionState = createMemo(() => {
-    const text = content();
-    const match = text.match(/@([a-z0-9_]*)$/i);
-    if (match) {
-      return {
-        isOpen: true,
-        query: match[1],
-        cursorPosition: match.index!,
-        type: "@" as const,
-      };
+    const match = content().match(/@([a-z0-9_]*)$/i);
+    if (!match) {
+      return { isOpen: false, query: "", cursorPosition: -1 };
     }
-    return { isOpen: false, query: "", cursorPosition: -1, type: "@" as const };
-  });
 
-  // Detect document mention query from content (# for documents)
-  const documentMentionState = createMemo(() => {
-    const text = content();
-    const match = text.match(/#([a-z0-9_]*)$/i);
-    if (match) {
-      return {
-        isOpen: true,
-        query: match[1],
-        cursorPosition: match.index!,
-        type: "#" as const,
-      };
-    }
-    return { isOpen: false, query: "", cursorPosition: -1, type: "#" as const };
-  });
-
-  // Determine which mention type is active (prioritize # if both match)
-  const activeMentionState = createMemo(() => {
-    const docState = documentMentionState();
-    const memberState = mentionState();
-    if (docState.isOpen) return docState;
-    if (memberState.isOpen) return memberState;
-    return memberState; // default to member state for type
+    return {
+      isOpen: true,
+      query: match[1],
+      cursorPosition: match.index ?? -1,
+    };
   });
 
   const members = useQuery(
@@ -121,105 +83,66 @@ export function ChatInput(props: ChatInputProps) {
       ),
   );
 
-  const documents = useQuery(
-    () =>
-      liveQuery(
-        clientDb
-          .select({
-            id: documentsTable.id,
-            title: documentsTable.title,
-            description: documentsTable.description,
-          })
-          .from(documentsTable)
-          .where(eq(documentsTable.channelId, props.channelId))
-          .orderBy(desc(documentsTable.createdAt)),
-      ),
-  );
-
-  // Fuzzy search utility (same as MentionAutocomplete)
   function fuzzyMatch(text: string, query: string): boolean {
     if (!query) return true;
-    text = text.toLowerCase();
-    query = query.toLowerCase();
-    let i = 0,
-      j = 0;
-    while (i < text.length && j < query.length) {
-      if (text[i] === query[j]) {
-        j++;
+
+    const haystack = text.toLowerCase();
+    const needle = query.toLowerCase();
+    let haystackIndex = 0;
+    let needleIndex = 0;
+
+    while (haystackIndex < haystack.length && needleIndex < needle.length) {
+      if (haystack[haystackIndex] === needle[needleIndex]) {
+        needleIndex += 1;
       }
-      i++;
+      haystackIndex += 1;
     }
-    return j === query.length;
+
+    return needleIndex === needle.length;
   }
 
-  // Get filtered mention options (members)
-  const mentionOptions = createMemo(() => {
+  const mentionOptions = createMemo<MentionOption[]>(() => {
     const state = mentionState();
     if (!state.isOpen) return [];
-    const q = state.query.toLowerCase();
-    const list = (members().data || [])
-      .filter((m) => m.name)
-      .map((m) => ({
-        type: m.member_type as "user" | "agent",
-        id: m.member_id,
-        name: m.name!,
-      }));
-    return list.filter((o) => fuzzyMatch(o.name, q));
+
+    return (members().data || [])
+      .filter((member) => member.name)
+      .map((member) => ({
+        type: member.member_type as "user" | "agent",
+        id: member.member_id,
+        name: member.name!,
+      }))
+      .filter((option) => fuzzyMatch(option.name, state.query));
   });
 
-  // Get filtered document mention options
-  const documentMentionOptions = createMemo(() => {
-    const state = documentMentionState();
-    if (!state.isOpen) return [];
-    const q = state.query.toLowerCase();
-    const list = (documents().data || []).map((d) => ({
-      type: "document" as const,
-      id: d.id,
-      name: d.title,
-    }));
-    return list.filter((o) => fuzzyMatch(o.name, q));
-  });
-
-  // Check if the agent mention text is still present in the content
-  // This tracks removal of the agent mention to re-enable agent selection
   const agentStillMentioned = createMemo(() => {
     const agent = selectedAgent();
     if (!agent) return false;
-    const text = content();
-    const mentionPattern = new RegExp(`@${agent.name}\\b`, "i");
-    return mentionPattern.test(text);
+
+    return new RegExp(`@${agent.name}\\b`, "i").test(content());
   });
 
-  // Reactive: clear selectedAgent if the mention text is removed
   const effectiveSelectedAgent = createMemo(() => {
     const agent = selectedAgent();
     if (agent && !agentStillMentioned()) {
-      // Defer the state update to avoid setting state during render
       queueMicrotask(() => setSelectedAgent(null));
       return null;
     }
+
     return agent;
   });
 
   const handleMentionSelect = (option: MentionOption) => {
-    const state = activeMentionState();
-    if (state.isOpen) {
-      const before = content().slice(0, state.cursorPosition);
-      const after = content().slice(
-        state.cursorPosition + state.query.length + 1,
-      );
-      const prefix = state.type === "#" ? "#" : "@";
-      setContent(before + prefix + option.name + " " + after);
-      setActiveMentionIndex(0);
+    const state = mentionState();
+    if (!state.isOpen) return;
 
-      // Track agent selection
-      if (option.type === "agent") {
-        setSelectedAgent({
-          id: option.id,
-          name: option.name,
-          type: "agent",
-        });
-      }
+    const before = content().slice(0, state.cursorPosition);
+    const after = content().slice(state.cursorPosition + state.query.length + 1);
+    setContent(before + "@" + option.name + " " + after);
+    setActiveMentionIndex(0);
+
+    if (option.type === "agent") {
+      setSelectedAgent({ id: option.id, name: option.name, type: "agent" });
     }
   };
 
@@ -227,7 +150,6 @@ export function ChatInput(props: ChatInputProps) {
     const text = content().trim();
     if (!text) return;
 
-    // Capture agent metadata before clearing
     const agent = effectiveSelectedAgent();
     const mentionedAgent = agent
       ? JSON.stringify({ id: agent.id, type: "agent", name: agent.name })
@@ -237,36 +159,21 @@ export function ChatInput(props: ChatInputProps) {
     setSelectedAgent(null);
 
     try {
-      const messageId = crypto.randomUUID();
       const username = getUsername();
-      const userMessageCreatedAt = new Date().toISOString();
-
       if (!username) {
         console.error("[send] No username found");
         return;
       }
 
-      console.log("before writeTransaction", {
-        username,
-        messageId,
-        text,
-        mentionedAgent,
-      });
-
-      const t = clientDb.insert(messages).values({
-        id: messageId,
+      await clientDb.insert(messages).values({
+        id: crypto.randomUUID(),
         channelId: props.channelId,
         authorType: "user",
         authorId: username,
         content: text,
         mentionedAgent,
-        createdAt: userMessageCreatedAt,
+        createdAt: new Date().toISOString(),
       });
-
-      console.log("after writeTransaction sync");
-      await t;
-
-      console.log("after writeTransaction async");
     } catch (error: unknown) {
       console.error("[send] error", error);
     }
@@ -283,36 +190,29 @@ export function ChatInput(props: ChatInputProps) {
             value={content()}
             onInput={(e) => setContent(e.currentTarget.value)}
             onKeyDown={(e) => {
-              const state = activeMentionState();
+              const state = mentionState();
               if (state.isOpen) {
-                const options =
-                  state.type === "#"
-                    ? documentMentionOptions()
-                    : mentionOptions();
-                // Skip disabled agent entries when navigating
+                const options = mentionOptions();
                 const isOptionDisabled = (idx: number) => {
-                  const opt = options[idx];
-                  return opt?.type === "agent" && hasAgent();
+                  const option = options[idx];
+                  return option?.type === "agent" && hasAgent();
                 };
+
                 if (e.key === "ArrowDown") {
                   e.preventDefault();
                   let next = activeMentionIndex() + 1;
-                  while (next < options.length && isOptionDisabled(next))
-                    next++;
+                  while (next < options.length && isOptionDisabled(next)) next += 1;
                   if (next < options.length) setActiveMentionIndex(next);
                 } else if (e.key === "ArrowUp") {
                   e.preventDefault();
                   let prev = activeMentionIndex() - 1;
-                  while (prev >= 0 && isOptionDisabled(prev)) prev--;
+                  while (prev >= 0 && isOptionDisabled(prev)) prev -= 1;
                   if (prev >= 0) setActiveMentionIndex(prev);
                 } else if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  const activeOption = options[activeMentionIndex()];
-                  if (
-                    activeOption &&
-                    !(activeOption.type === "agent" && hasAgent())
-                  ) {
-                    handleMentionSelect(activeOption);
+                  const option = options[activeMentionIndex()];
+                  if (option && !(option.type === "agent" && hasAgent())) {
+                    handleMentionSelect(option);
                   }
                 } else if (e.key === "Escape") {
                   e.preventDefault();
@@ -336,10 +236,8 @@ export function ChatInput(props: ChatInputProps) {
             }`}
           />
           <MentionAutocomplete
-            channelId={props.channelId}
-            mentionQuery={activeMentionState().query}
-            mentionType={activeMentionState().type}
-            isOpen={activeMentionState().isOpen}
+            options={mentionOptions()}
+            isOpen={mentionState().isOpen}
             activeIndex={activeMentionIndex()}
             disabledAgents={hasAgent()}
             onSelect={handleMentionSelect}

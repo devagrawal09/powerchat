@@ -61,27 +61,12 @@ export const powerSyncSchema = new Schema({
       },
     },
   ),
-  documents: new Table(
-    {
-      channel_id: column.text,
-      title: column.text,
-      description: column.text,
-      content: column.text,
-      created_at: column.text,
-    },
-    {
-      indexes: {
-        idx_documents_channel: ["channel_id"],
-      },
-    },
-  ),
   agent_runs: new Table(
     {
       channel_id: column.text,
       agent_id: column.text,
       agent_message_id: column.text,
       status: column.text,
-      trace: column.text,
       error: column.text,
       started_at: column.text,
       completed_at: column.text,

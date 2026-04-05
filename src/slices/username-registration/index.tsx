@@ -2,6 +2,7 @@ import { asc } from "drizzle-orm";
 import { clientDb, liveQuery, users } from "~/db/client";
 import { createSignal, Show } from "solid-js";
 import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
+import { useSession } from "~/lib/session";
 
 type UserRow = {
   id: string;
@@ -10,6 +11,7 @@ type UserRow = {
 export function UsernameRegistration(props: {
   onSuccess: (username: string) => void;
 }) {
+  const session = useSession();
   const [username, setUsername] = createSignal("");
   const [error, setError] = createSignal("");
   const [submitting, setSubmitting] = createSignal(false);
@@ -59,10 +61,7 @@ export function UsernameRegistration(props: {
 
       await clientDb.insert(users).values({ id: value, createdAt: now });
 
-      // Set cookie
-      document.cookie = `pc_username=${value}; path=/; max-age=${
-        60 * 60 * 24 * 365
-      }; SameSite=Lax`;
+      session.setUsername(value);
       props.onSuccess(value);
     } catch (err: any) {
       console.error("[UsernameRegistration] Error:", err);

@@ -3,7 +3,6 @@ import tailwindcss from "@tailwindcss/vite";
 import devtools from "solid-devtools/vite";
 
 export default defineConfig({
-  middleware: "src/middleware.ts",
   vite: {
     plugins: [tailwindcss(), devtools({ autoname: true })],
     optimizeDeps: {

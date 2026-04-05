@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { channels, clientDb, liveQuery } from "~/db/client";
-import { Show, createEffect } from "solid-js";
-import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
+import { Show, createEffect, createSignal } from "solid-js";
+import { useNavigate, useParams } from "@solidjs/router";
 import { ChannelMemberList } from "~/slices/channel-member-list";
 import { ChannelAgentsList } from "~/slices/channel-agents-list";
 import { ChannelInvite } from "~/slices/channel-invite";
@@ -10,17 +10,13 @@ import { CreateAgent } from "~/slices/create-agent";
 import { ChatMessages } from "~/slices/chat-messages";
 import { ChatInput } from "~/slices/chat-input";
 import { AgentViewer } from "~/slices/agent-viewer";
-import { AgentTraceViewer } from "~/slices/agent-trace-viewer";
 import { useQuery } from "~/lib/powersync-solid";
 
 export default function ChannelPage() {
   const params = useParams();
   const channelIdParam = () => params.id ?? "";
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const filePath = () => searchParams.doc as string | undefined;
-  const agentId = () => searchParams.agent as string | undefined;
-  const traceRunId = () => searchParams.trace as string | undefined;
+  const [selectedAgentId, setSelectedAgentId] = createSignal<string | null>(null);
 
   const channel = useQuery(
     () =>
@@ -40,34 +36,12 @@ export default function ChannelPage() {
     }
   });
 
-  const handleDocumentClick = (docId: string) => {
-    setSearchParams({ doc: docId, agent: undefined, trace: undefined });
-  };
-
-  const handleCloseDocument = () => {
-    setSearchParams({ doc: undefined });
-  };
-
   const handleAgentClick = (agentId: string) => {
-    setSearchParams({ agent: agentId, doc: undefined, trace: undefined });
+    setSelectedAgentId(agentId);
   };
 
   const handleCloseAgent = () => {
-    setSearchParams({ agent: undefined });
-  };
-
-  const handleTraceClick = (runId: string) => {
-    setSearchParams({ trace: runId, doc: undefined, agent: undefined });
-  };
-
-  const handleCloseTrace = () => {
-    setSearchParams({ trace: undefined });
-  };
-
-  const activePanel = () => {
-    if (traceRunId()) return "trace";
-    if (agentId()) return "agent";
-    return "chat";
+    setSelectedAgentId(null);
   };
 
   return (
@@ -75,30 +49,19 @@ export default function ChannelPage() {
       {(channelId) => (
         <div class="flex-1 flex h-full">
           <div class="flex-1 flex min-w-0">
-            <div class="flex-1 flex flex-col min-w-0">
-              <ChannelHeader channelId={channelId()} />
+              <div class="flex-1 flex flex-col min-w-0">
+                <ChannelHeader channelId={channelId()} />
 
-              <div class="flex-1 flex flex-col min-h-0">
-                <ChatMessages channelId={channelId()} />
-                <ChatInput channelId={channelId()} channelName={filePath()} />
+                <div class="flex-1 flex flex-col min-h-0">
+                  <ChatMessages channelId={channelId()} />
+                  <ChatInput channelId={channelId()} />
+                </div>
               </div>
-            </div>
 
-            <Show when={activePanel() !== "chat"}>
+            <Show when={selectedAgentId()}>
               <div class="w-96 border-l border-gray-200 bg-white min-w-0">
-                <Show when={activePanel() === "agent" && agentId()}>
-                  {(id) => (
-                    <AgentViewer agentId={id()} onClose={handleCloseAgent} />
-                  )}
-                </Show>
-
-                <Show when={activePanel() === "trace" && traceRunId()}>
-                  {(runId) => (
-                    <AgentTraceViewer
-                      runId={runId()}
-                      onClose={handleCloseTrace}
-                    />
-                  )}
+                <Show when={selectedAgentId()}>
+                  {(id) => <AgentViewer agentId={id()} onClose={handleCloseAgent} />}
                 </Show>
               </div>
             </Show>
@@ -111,7 +74,6 @@ export default function ChannelPage() {
               <ChannelAgentsList
                 channelId={channelId()}
                 onAgentClick={handleAgentClick}
-                onTraceClick={handleTraceClick}
               />
             </div>
             <CreateAgent channelId={channelId()} />

@@ -105,22 +105,6 @@ export const messages = pgTable("messages", {
   ),
 ]);
 
-export const documents = pgTable("documents", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  channelId: uuid("channel_id")
-    .references(() => channels.id, { onDelete: "cascade" })
-    .notNull(),
-  title: text("title").notNull(),
-  description: text("description").notNull(),
-  content: text("content").notNull(),
-  createdAt: timestamp("created_at", {
-    withTimezone: true,
-    mode: "string",
-  })
-    .defaultNow()
-    .notNull(),
-}, (table) => [index("idx_documents_channel").on(table.channelId)]);
-
 export const agentRuns = pgTable("agent_runs", {
   id: uuid("id").defaultRandom().primaryKey(),
   channelId: uuid("channel_id")
@@ -131,7 +115,6 @@ export const agentRuns = pgTable("agent_runs", {
     onDelete: "set null",
   }),
   status: text("status").default("running").notNull(),
-  trace: text("trace").default("").notNull(),
   error: text("error"),
   startedAt: timestamp("started_at", {
     withTimezone: true,
@@ -158,6 +141,5 @@ export const serverSchema = {
   channels,
   channelMembers,
   messages,
-  documents,
   agentRuns,
 };

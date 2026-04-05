@@ -2,40 +2,26 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@solidjs/testing-library";
 import { ChannelAgentsList } from "./index";
 
-// Track call count to return different data for agents vs active runs queries
 let queryCallCount = 0;
 
-// Mock dependencies
 vi.mock("~/lib/powersync-solid/hooks/useQuery", () => ({
   useQuery: vi.fn(() => {
-    queryCallCount++;
-    // First call is agents, second call is active runs
+    queryCallCount += 1;
     if (queryCallCount % 2 === 1) {
       return () => ({
         data: [
-          {
-            member_type: "agent",
-            member_id: "agent-1",
-            name: "Assistant",
-          },
-          {
-            member_type: "agent",
-            member_id: "agent-2",
-            name: "Researcher",
-          },
+          { member_type: "agent", member_id: "agent-1", name: "Assistant" },
+          { member_type: "agent", member_id: "agent-2", name: "Researcher" },
         ],
         isLoading: false,
       });
     }
+
     return () => ({
       data: [],
       isLoading: false,
     });
   }),
-}));
-
-vi.mock("~/server/stop-agent", () => ({
-  stopAgent: vi.fn(),
 }));
 
 describe("ChannelAgentsList", () => {
@@ -45,44 +31,31 @@ describe("ChannelAgentsList", () => {
   });
 
   it("renders agents section header", () => {
-    const onAgentClick = vi.fn();
-    const onTraceClick = vi.fn();
     render(() => (
-      <ChannelAgentsList
-        channelId="test-channel"
-        onAgentClick={onAgentClick}
-        onTraceClick={onTraceClick}
-      />
+      <ChannelAgentsList channelId="test-channel" onAgentClick={vi.fn()} />
     ));
+
     expect(screen.getByText("Agents")).toBeInTheDocument();
   });
 
   it("renders list of agents", () => {
-    const onAgentClick = vi.fn();
-    const onTraceClick = vi.fn();
     render(() => (
-      <ChannelAgentsList
-        channelId="test-channel"
-        onAgentClick={onAgentClick}
-        onTraceClick={onTraceClick}
-      />
+      <ChannelAgentsList channelId="test-channel" onAgentClick={vi.fn()} />
     ));
+
     expect(screen.getByText("Assistant")).toBeInTheDocument();
     expect(screen.getByText("Researcher")).toBeInTheDocument();
   });
 
-  it("calls onAgentClick when non-running agent is clicked", () => {
+  it("calls onAgentClick when agent is clicked", () => {
     const onAgentClick = vi.fn();
-    const onTraceClick = vi.fn();
+
     render(() => (
-      <ChannelAgentsList
-        channelId="test-channel"
-        onAgentClick={onAgentClick}
-        onTraceClick={onTraceClick}
-      />
+      <ChannelAgentsList channelId="test-channel" onAgentClick={onAgentClick} />
     ));
-    const assistant = screen.getByText("Assistant");
-    fireEvent.click(assistant);
+
+    fireEvent.click(screen.getByText("Assistant"));
+
     expect(onAgentClick).toHaveBeenCalledWith("agent-1");
   });
 
@@ -93,15 +66,10 @@ describe("ChannelAgentsList", () => {
       isLoading: false,
     }));
 
-    const onAgentClick = vi.fn();
-    const onTraceClick = vi.fn();
     render(() => (
-      <ChannelAgentsList
-        channelId="test-channel"
-        onAgentClick={onAgentClick}
-        onTraceClick={onTraceClick}
-      />
+      <ChannelAgentsList channelId="test-channel" onAgentClick={vi.fn()} />
     ));
+
     expect(screen.getByText("Agents")).toBeInTheDocument();
     expect(screen.queryByText("Assistant")).not.toBeInTheDocument();
   });
@@ -113,15 +81,10 @@ describe("ChannelAgentsList", () => {
       isLoading: true,
     }));
 
-    const onAgentClick = vi.fn();
-    const onTraceClick = vi.fn();
     render(() => (
-      <ChannelAgentsList
-        channelId="test-channel"
-        onAgentClick={onAgentClick}
-        onTraceClick={onTraceClick}
-      />
+      <ChannelAgentsList channelId="test-channel" onAgentClick={vi.fn()} />
     ));
+
     expect(screen.getByText("Agents")).toBeInTheDocument();
     expect(screen.queryByText("Assistant")).not.toBeInTheDocument();
   });

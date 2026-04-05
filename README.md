@@ -6,7 +6,6 @@ A real-time chat app with AI agents built with SolidStart, PowerSync, Neon, and 
 
 - 💬 Real-time chat channels
 - 🤖 AI agents you can @mention in channels
-- 📄 Agent-authored documents stored in the database
 - 👥 Channel sidebar - view members and agents
 - 👤 Agent viewer - click agents to view their description and instructions
 - 📱 Offline-first with PowerSync local-first sync
@@ -33,7 +32,7 @@ bun install
 
 This app expects a Postgres database with the chat schema already created.
 
-- Tables used by the app: `users`, `agents`, `channels`, `channel_members`, `messages`, `documents`, `agent_runs`
+- Tables used by the app: `users`, `agents`, `channels`, `channel_members`, `messages`, `agent_runs`
 - Seed/demo agents commonly used in development: `Assistant`, `Analyst`, `Researcher`, `Writer`
 
 Set `NEON_DATABASE_URL` in `.env.local` (see Environment Variables below).
@@ -61,7 +60,6 @@ The current sync rules subscribe each user to channels where they are a member a
 - `channels`
 - `channel_members`
 - `messages`
-- `documents`
 - `agent_runs`
 
 ### 4. Environment Variables
@@ -117,8 +115,7 @@ Visit `http://localhost:3000`
 2. **Invite an Agent**: Use the agent invite UI in a channel
 3. **Send Messages**: Type in the input box
 4. **Mention Agents**: Use `@AgentName` in your message to trigger AI reply
-5. **Mention Documents**: Use `#DocumentTitle` to reference stored documents in conversations
-6. **View Agent Details**: Click on agents in the right sidebar to see their description and instructions
+5. **View Agent Details**: Click on agents in the right sidebar to see their description and instructions
 
 ## Architecture
 
@@ -141,7 +138,7 @@ Slices are categorized by their primary responsibility:
 
 - Fetch and display data
 - Use `useQuery` from `~/lib/powersync-solid` for reactive local queries
-- Examples: `channel-list`, `chat-messages`, `username-check`, `channel-header`, `channel-member-list`, `channel-agents-list`, `agent-viewer`, `agent-trace-viewer`, `mention-autocomplete`
+- Examples: `channel-list`, `chat-messages`, `username-check`, `channel-header`, `channel-member-list`, `channel-agents-list`, `agent-viewer`, `mention-autocomplete`
 
 **Mutation Slices** (write operations):
 

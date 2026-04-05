@@ -2,11 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@solidjs/testing-library";
 import { UsernameRegistration } from "./index";
 
-const { mockInsertValues, mockInsert } = vi.hoisted(() => {
+const { mockInsertValues, mockInsert, mockSetUsername } = vi.hoisted(() => {
   const insertValues = vi.fn().mockResolvedValue(undefined);
   return {
     mockInsertValues: insertValues,
     mockInsert: vi.fn(() => ({ values: insertValues })),
+    mockSetUsername: vi.fn(),
   };
 });
 
@@ -28,13 +29,19 @@ vi.mock("~/lib/powersync-solid/hooks/useQuery", () => ({
   })),
 }));
 
+vi.mock("~/lib/session", () => ({
+  useSession: () => ({
+    username: () => null,
+    setUsername: mockSetUsername,
+  }),
+}));
+
 describe("UsernameRegistration", () => {
   const mockOnSuccess = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
     existingUsers = [];
-    document.cookie = "pc_username=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";
   });
 
   it("renders registration form", () => {
@@ -97,8 +104,8 @@ describe("UsernameRegistration", () => {
 
     await waitFor(() => {
       expect(mockInsert).toHaveBeenCalled();
+      expect(mockSetUsername).toHaveBeenCalledWith("testuser");
       expect(mockOnSuccess).toHaveBeenCalledWith("testuser");
-      expect(document.cookie).toContain("pc_username=testuser");
     });
 
     expect(mockInsertValues).toHaveBeenCalledWith(

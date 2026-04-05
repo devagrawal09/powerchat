@@ -1,18 +1,19 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { UsernameCheck } from "./index";
 
-vi.mock("~/lib/getUsername", () => ({
-  getUsername: vi.fn(() => "testuser"),
+const mockSession = vi.hoisted(() => ({
+  username: vi.fn<() => string | null>(() => "testuser"),
+  setUsername: vi.fn(),
+}));
+
+vi.mock("~/lib/session", () => ({
+  useSession: () => mockSession,
 }));
 
 describe("UsernameCheck", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
+    mockSession.username.mockReturnValue("testuser");
   });
 
   it("returns username when available", () => {
@@ -22,9 +23,8 @@ describe("UsernameCheck", () => {
     expect(result.checking()).toBe(false);
   });
 
-  it("returns null username when not available", async () => {
-    const { getUsername } = await import("~/lib/getUsername");
-    vi.mocked(getUsername).mockReturnValueOnce(null);
+  it("returns null username when not available", () => {
+    mockSession.username.mockReturnValue(null);
 
     const result = UsernameCheck();
     expect(result.hasUsername()).toBe(false);

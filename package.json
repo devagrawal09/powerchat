@@ -1,5 +1,5 @@
 {
-  "name": "example-with-tailwindcss",
+  "name": "powerchat",
   "type": "module",
   "scripts": {
     "dev": "mkdir -p logs && vinxi dev 2>&1 | tee logs/dev.log",

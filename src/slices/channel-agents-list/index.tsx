@@ -8,13 +8,6 @@ import {
 } from "~/db/client";
 import { For, Show, createMemo } from "solid-js";
 import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
-import { stopAgent } from "~/server/stop-agent";
-
-type MemberRow = {
-  member_type: "agent";
-  member_id: string;
-  name: string | null;
-};
 
 type AgentRunRow = {
   id: string;
@@ -25,57 +18,54 @@ type AgentRunRow = {
 type ChannelAgentsListProps = {
   channelId: string;
   onAgentClick: (agentId: string) => void;
-  onTraceClick: (runId: string) => void;
 };
 
 export function ChannelAgentsList(props: ChannelAgentsListProps) {
   const agentName = sql<string>`coalesce(${agentsTable.name}, 'Agent')`;
 
-  const agents = useQuery(
-    () =>
-      liveQuery(
-        clientDb
-          .select({
-            member_type: sql<"agent">`'agent'`,
-            member_id: channelMembers.memberId,
-            name: agentName,
-          })
-          .from(channelMembers)
-          .leftJoin(
-            agentsTable,
-            and(
-              eq(channelMembers.memberType, "agent"),
-              eq(agentsTable.id, channelMembers.memberId),
-            ),
-          )
-          .where(
-            and(
-              eq(channelMembers.channelId, props.channelId),
-              eq(channelMembers.memberType, "agent"),
-            ),
-          )
-          .orderBy(asc(agentName)),
-      ),
+  const agents = useQuery(() =>
+    liveQuery(
+      clientDb
+        .select({
+          member_type: sql<"agent">`'agent'`,
+          member_id: channelMembers.memberId,
+          name: agentName,
+        })
+        .from(channelMembers)
+        .leftJoin(
+          agentsTable,
+          and(
+            eq(channelMembers.memberType, "agent"),
+            eq(agentsTable.id, channelMembers.memberId),
+          ),
+        )
+        .where(
+          and(
+            eq(channelMembers.channelId, props.channelId),
+            eq(channelMembers.memberType, "agent"),
+          ),
+        )
+        .orderBy(asc(agentName)),
+    ),
   );
 
-  const activeRuns = useQuery(
-    () =>
-      liveQuery(
-        clientDb
-          .select({
-            id: agentRuns.id,
-            agent_id: agentRuns.agentId,
-            status: agentRuns.status,
-          })
-          .from(agentRuns)
-          .where(
-            and(
-              eq(agentRuns.channelId, props.channelId),
-              eq(agentRuns.status, "running"),
-            ),
-          )
-          .orderBy(desc(agentRuns.startedAt)),
-      ),
+  const activeRuns = useQuery(() =>
+    liveQuery(
+      clientDb
+        .select({
+          id: agentRuns.id,
+          agent_id: agentRuns.agentId,
+          status: agentRuns.status,
+        })
+        .from(agentRuns)
+        .where(
+          and(
+            eq(agentRuns.channelId, props.channelId),
+            eq(agentRuns.status, "running"),
+          ),
+        )
+        .orderBy(desc(agentRuns.startedAt)),
+    ),
   );
 
   const runsByAgent = createMemo(() => {
@@ -88,12 +78,6 @@ export function ChannelAgentsList(props: ChannelAgentsListProps) {
     }
     return map;
   });
-
-  const handleStop = async (e: MouseEvent, runId: string) => {
-    e.stopPropagation();
-    e.preventDefault();
-    await stopAgent(runId);
-  };
 
   return (
     <>
@@ -109,14 +93,7 @@ export function ChannelAgentsList(props: ChannelAgentsListProps) {
             return (
               <div class="flex items-center gap-2 py-1">
                 <div
-                  onClick={() => {
-                    const run = activeRun();
-                    if (run) {
-                      props.onTraceClick(run.id);
-                    } else {
-                      props.onAgentClick(member.member_id);
-                    }
-                  }}
+                  onClick={() => props.onAgentClick(member.member_id)}
                   class="flex-1 text-sm text-gray-900 cursor-pointer hover:text-blue-600 hover:underline flex items-center gap-1.5"
                 >
                   <Show when={isRunning()}>
@@ -146,16 +123,6 @@ export function ChannelAgentsList(props: ChannelAgentsListProps) {
                     {member.name}
                   </span>
                 </div>
-                <Show when={isRunning()}>
-                  <button
-                    type="button"
-                    onClick={(e) => handleStop(e, activeRun()!.id)}
-                    class="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-600 hover:bg-red-200 shrink-0"
-                    title="Stop agent"
-                  >
-                    Stop
-                  </button>
-                </Show>
               </div>
             );
           }}

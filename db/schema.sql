@@ -1,5 +1,5 @@
 -- PowerChat Database Schema
--- Creates tables for users, agents, channels, memberships, messages, documents, and agent runs
+-- Creates tables for users, agents, channels, memberships, messages, and agent runs
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -55,24 +55,13 @@ CREATE TABLE IF NOT EXISTS messages (
 -- Add mentioned_agent column if it doesn't exist (for existing databases)
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS mentioned_agent JSONB;
 
--- Documents (markdown content scoped to channels)
-CREATE TABLE IF NOT EXISTS documents (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  description TEXT NOT NULL,
-  content TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- Agent runs (tracks active agent executions with trace data)
+-- Agent runs (tracks agent execution status)
 CREATE TABLE IF NOT EXISTS agent_runs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
   agent_id TEXT NOT NULL,
   agent_message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
   status TEXT NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'completed', 'error', 'stopped')),
-  trace TEXT NOT NULL DEFAULT '',
   error TEXT,
   started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   completed_at TIMESTAMPTZ
@@ -82,6 +71,5 @@ CREATE TABLE IF NOT EXISTS agent_runs (
 CREATE INDEX IF NOT EXISTS idx_channel_members_member ON channel_members (member_type, member_id);
 CREATE INDEX IF NOT EXISTS idx_messages_channel_time ON messages (channel_id, created_at, id);
 CREATE INDEX IF NOT EXISTS idx_messages_author ON messages (author_type, author_id);
-CREATE INDEX IF NOT EXISTS idx_documents_channel ON documents (channel_id);
 CREATE INDEX IF NOT EXISTS idx_agent_runs_channel ON agent_runs (channel_id);
 CREATE INDEX IF NOT EXISTS idx_agent_runs_status ON agent_runs (channel_id, status);

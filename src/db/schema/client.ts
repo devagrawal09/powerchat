@@ -56,19 +56,6 @@ export const messages = sqliteTable(
   ],
 );
 
-export const documents = sqliteTable(
-  "documents",
-  {
-    id: text("id").primaryKey().notNull(),
-    channelId: text("channel_id").notNull(),
-    title: text("title").notNull(),
-    description: text("description").notNull(),
-    content: text("content").notNull(),
-    createdAt: text("created_at").notNull(),
-  },
-  (table) => [index("idx_documents_channel").on(table.channelId)],
-);
-
 export const agentRuns = sqliteTable(
   "agent_runs",
   {
@@ -77,7 +64,6 @@ export const agentRuns = sqliteTable(
     agentId: text("agent_id").notNull(),
     agentMessageId: text("agent_message_id"),
     status: text("status").notNull(),
-    trace: text("trace").notNull(),
     error: text("error"),
     startedAt: text("started_at").notNull(),
     completedAt: text("completed_at"),
@@ -104,7 +90,6 @@ export const clientSchema = {
   channels,
   channelMembers,
   messages,
-  documents,
   agentRuns,
   isoMutations: {
     tableDefinition: isoMutations,

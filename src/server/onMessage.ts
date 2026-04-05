@@ -68,7 +68,6 @@ export async function onMessage(message: MessageRow): Promise<void> {
       agentId,
       agentMessageId,
       status: "running",
-      trace: "",
       startedAt: agentMessageCreatedAt,
     });
 
