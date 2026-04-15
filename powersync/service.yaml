@@ -1,55 +1,24 @@
-# Adds YAML Schema support for VSCode users with the YAML extension installed. This enables features like validation and autocompletion based on the provided schema.
+# PowerSync Cloud config (mirrors provisioned cloud instance)
 # yaml-language-server: $schema=https://unpkg.com/@powersync/cli-schemas@latest/json-schema/service-config.json
 
-# PowerSync Cloud config – example template with all schema options documented.
-# Uncomment one block per type (one connection type + optional client_auth). We recommend secrets as: secret: !env ENV_NAME (see ../../.vscode/settings.json).
-# Docs: https://docs.powersync.com/usage/sync-rules
-#
-# -----------------------------------------------------------------------------
-# TOP LEVEL
-# -----------------------------------------------------------------------------
-
-_type: cloud
-name: my-cli-instance
-
-# region (required): deployment region, e.g. us
-# Note: This cannot be changed after the initial deployment
 region: us
-
-# -------------------------------------------------------------------------
-# Replication (required): database connections for sync
-# Note: only a single connection is currently supported.
-# Connection: `uri` and `password` are required for a complete connection. Alternatively omit `uri`
-# and provide individual fields (hostname, port, database, username, password, etc.); they are used
-# to construct the connection URI. For MongoDB, `uri` is required.
-# -------------------------------------------------------------------------
-#     -------------------------------------------------------------------------
-#     PostgreSQL – uncomment this entire block to use
-#     -------------------------------------------------------------------------
 replication:
   connections:
-    - type:
-        postgresql
-        # Connection string (recommended). Omit and use hostname/port/database/username/password instead if you prefer.
-        # [optional]
-      uri: postgresql://neondb_owner:npg_lCLEu5Z2ficg@ep-morning-feather-aew5b16o.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+    - type: postgresql
+      name: Default
       password:
-        secret: npg_lCLEu5Z2ficg
-#       # [optional] Alternative to uri: individual connection parameters.
-#       hostname: example.com
-#       port: 5432
-#       database: one
-#       username: postgres
-#       # [optional] Connection identifiers.
-#       name: string
-#       id: string
-#       tag: string
-#       # [optional] TLS mode. Options: verify-full | verify-ca. Default: verify-full. Use verify-full for production.
-#       sslmode: verify-full
-#       # [optional] TLS certificates (PEM). Required for verify-ca; optional for verify-full.
-#       cacert: string
-#       client_certificate: string
-#       client_private_key:
-#         secret: !env POWERSYNC_DATABASE_CLIENT_KEY
-#       # [optional] Cloud VPC endpoint hostname.
-#       vpc_endpoint_hostname: string
+        secret_ref: default_password
+      uri: postgresql://neondb_owner:npg_lCLEu5Z2ficg@ep-morning-feather-aew5b16o.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+client_auth:
+  jwks:
+    keys:
+      - kty: oct
+        kid: powerchat
+        k:
+          secret_ref: jwks_keys_powerchat
+        alg: HS256
+  supabase: false
+  additional_audiences: []
+  allow_temporary_tokens: true
+_type: cloud
+name: my-cli-instance
