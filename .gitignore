@@ -30,6 +30,7 @@ Thumbs.db
 # Logs
 /logs
 /.powersync
+/.mastra-workspaces
 
 .automaker
 

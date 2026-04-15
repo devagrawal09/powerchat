@@ -3,6 +3,7 @@
 import { Agent } from "@mastra/core/agent";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { agentRuns, agents, messages, users } from "~/db/schema/server";
+import { getChannelWorkspace } from "./channel-workspace";
 import { db } from "./db";
 
 const defaultModel = "openrouter/anthropic/claude-haiku-4.5";
@@ -175,12 +176,14 @@ export async function processAgentResponse(
     );
     const history = await loadChannelHistory(channelId);
     const input = createAgentInput(channelId, history, userMessage);
+    const workspace = await getChannelWorkspace(channelId);
 
     const agent = new Agent({
       id: "agent",
       name: agentName,
       instructions,
       model: process.env.AI_MODEL || defaultModel,
+      workspace,
     });
 
     const finalText = await streamAgentText(
