@@ -102,13 +102,17 @@ FIRECRAWL_API_KEY=
 bun dev
 ```
 
+Dev server binds to `0.0.0.0:9009` by default so it is reachable from your Tailscale devices.
+
 ### 6. Run Tests
 
 ```bash
 bun run test
 ```
 
-Visit `http://localhost:3000`
+Visit `http://localhost:9009`
+
+From another Tailscale device, use your machine's Tailscale IP or MagicDNS name on port `9009`.
 
 ## Usage
 

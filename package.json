@@ -2,7 +2,7 @@
   "name": "powerchat",
   "type": "module",
   "scripts": {
-    "dev": "mkdir -p logs && vinxi dev 2>&1 | tee logs/dev.log",
+    "dev": "mkdir -p logs && vinxi dev --host 0.0.0.0 --port 9009 2>&1 | tee logs/dev.log",
     "build": "vinxi build",
     "start": "vinxi start",
     "db:generate": "drizzle-kit generate",
