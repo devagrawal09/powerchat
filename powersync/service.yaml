@@ -8,7 +8,7 @@ replication:
       name: Default
       password:
         secret_ref: default_password
-      uri: postgresql://neondb_owner:npg_lCLEu5Z2ficg@ep-morning-feather-aew5b16o.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+      uri: postgresql://postgres@db.ejanbkfptbealuwtnfsr.supabase.co:5432/postgres
 client_auth:
   jwks:
     keys:

@@ -10,22 +10,24 @@ import { CreateAgent } from "~/slices/create-agent";
 import { ChatMessages } from "~/slices/chat-messages";
 import { ChatInput } from "~/slices/chat-input";
 import { AgentViewer } from "~/slices/agent-viewer";
+import { ChannelWorkspaceTree } from "~/slices/channel-workspace-tree";
 import { useQuery } from "~/lib/powersync-solid";
 
 export default function ChannelPage() {
   const params = useParams();
   const channelIdParam = () => params.id ?? "";
   const navigate = useNavigate();
-  const [selectedAgentId, setSelectedAgentId] = createSignal<string | null>(null);
+  const [selectedAgentId, setSelectedAgentId] = createSignal<string | null>(
+    null,
+  );
 
-  const channel = useQuery(
-    () =>
-      liveQuery(
-        clientDb
-          .select({ id: channels.id })
-          .from(channels)
-          .where(eq(channels.id, channelIdParam())),
-      ),
+  const channel = useQuery(() =>
+    liveQuery(
+      clientDb
+        .select({ id: channels.id })
+        .from(channels)
+        .where(eq(channels.id, channelIdParam())),
+    ),
   );
 
   createEffect(() => {
@@ -49,19 +51,21 @@ export default function ChannelPage() {
       {(channelId) => (
         <div class="flex-1 flex h-full">
           <div class="flex-1 flex min-w-0">
-              <div class="flex-1 flex flex-col min-w-0">
-                <ChannelHeader channelId={channelId()} />
+            <div class="flex-1 flex flex-col min-w-0">
+              <ChannelHeader channelId={channelId()} />
 
-                <div class="flex-1 flex flex-col min-h-0">
-                  <ChatMessages channelId={channelId()} />
-                  <ChatInput channelId={channelId()} />
-                </div>
+              <div class="flex-1 flex flex-col min-h-0">
+                <ChatMessages channelId={channelId()} />
+                <ChatInput channelId={channelId()} />
               </div>
+            </div>
 
             <Show when={selectedAgentId()}>
               <div class="w-96 border-l border-gray-200 bg-white min-w-0">
                 <Show when={selectedAgentId()}>
-                  {(id) => <AgentViewer agentId={id()} onClose={handleCloseAgent} />}
+                  {(id) => (
+                    <AgentViewer agentId={id()} onClose={handleCloseAgent} />
+                  )}
                 </Show>
               </div>
             </Show>
@@ -75,6 +79,7 @@ export default function ChannelPage() {
                 channelId={channelId()}
                 onAgentClick={handleAgentClick}
               />
+              <ChannelWorkspaceTree channelId={channelId()} />
             </div>
             <CreateAgent channelId={channelId()} />
             <div class="p-4 border-t border-gray-200">

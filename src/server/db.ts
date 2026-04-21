@@ -7,7 +7,7 @@ let pool: Pool | null = null;
 function getPool(): Pool {
   if (!pool) {
     pool = new Pool({
-      connectionString: process.env.NEON_DATABASE_URL,
+      connectionString: process.env.DATABASE_URL,
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 2000,

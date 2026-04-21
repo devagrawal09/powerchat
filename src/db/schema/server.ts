@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   check,
   index,
+  integer,
   jsonb,
   pgTable,
   text,
@@ -135,6 +136,32 @@ export const agentRuns = pgTable("agent_runs", {
   ),
 ]);
 
+export const workspaceNodes = pgTable("workspace_nodes", {
+  id: text("id").primaryKey(),
+  channelId: uuid("channel_id")
+    .references(() => channels.id, { onDelete: "cascade" })
+    .notNull(),
+  path: text("path").notNull(),
+  parentPath: text("parent_path"),
+  name: text("name").notNull(),
+  kind: text("kind").notNull(),
+  sizeBytes: integer("size_bytes"),
+  modifiedAt: timestamp("modified_at", {
+    withTimezone: true,
+    mode: "string",
+  }).notNull(),
+}, (table) => [
+  uniqueIndex("workspace_nodes_channel_id_path_unique").on(
+    table.channelId,
+    table.path,
+  ),
+  index("idx_workspace_nodes_channel_parent").on(
+    table.channelId,
+    table.parentPath,
+  ),
+  check("workspace_nodes_kind_check", sql`${table.kind} in ('file', 'dir')`),
+]);
+
 export const serverSchema = {
   users,
   agents,
@@ -142,4 +169,5 @@ export const serverSchema = {
   channelMembers,
   messages,
   agentRuns,
+  workspaceNodes,
 };

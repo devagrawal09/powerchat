@@ -40,50 +40,46 @@ export function ChannelInvite(props: ChannelInviteProps) {
     text: string;
   } | null>(null);
 
-  const allAgents = useQuery(
-    () =>
-      liveQuery(
-        clientDb
-          .select({
-            id: agents.id,
-            name: agents.name,
-            description: agents.description,
-          })
-          .from(agents)
-          .orderBy(asc(agents.name)),
-      ),
+  const allAgents = useQuery(() =>
+    liveQuery(
+      clientDb
+        .select({
+          id: agents.id,
+          name: agents.name,
+          description: agents.description,
+        })
+        .from(agents)
+        .orderBy(asc(agents.name)),
+    ),
   );
 
-  const channelAgents = useQuery(
-    () =>
-      liveQuery(
-        clientDb
-          .select({ member_id: channelMembersTable.memberId })
-          .from(channelMembersTable)
-          .where(
-            and(
-              eq(channelMembersTable.channelId, props.channelId),
-              eq(channelMembersTable.memberType, "agent"),
-            ),
+  const channelAgents = useQuery(() =>
+    liveQuery(
+      clientDb
+        .select({ member_id: channelMembersTable.memberId })
+        .from(channelMembersTable)
+        .where(
+          and(
+            eq(channelMembersTable.channelId, props.channelId),
+            eq(channelMembersTable.memberType, "agent"),
           ),
-      ),
+        ),
+    ),
   );
 
-  const allUsers = useQuery(
-    () =>
-      liveQuery(
-        clientDb.select({ id: users.id }).from(users).orderBy(asc(users.id)),
-      ),
+  const allUsers = useQuery(() =>
+    liveQuery(
+      clientDb.select({ id: users.id }).from(users).orderBy(asc(users.id)),
+    ),
   );
 
-  const channelMembers = useQuery(
-    () =>
-      liveQuery(
-        clientDb
-          .select({ member_id: channelMembersTable.memberId })
-          .from(channelMembersTable)
-          .where(eq(channelMembersTable.channelId, props.channelId)),
-      ),
+  const channelMembers = useQuery(() =>
+    liveQuery(
+      clientDb
+        .select({ member_id: channelMembersTable.memberId })
+        .from(channelMembersTable)
+        .where(eq(channelMembersTable.channelId, props.channelId)),
+    ),
   );
 
   // Filter out agents already in channel
@@ -228,7 +224,7 @@ export function ChannelInvite(props: ChannelInviteProps) {
   };
 
   return (
-    <div class="p-4 border-t border-gray-200">
+    <div class="p-2">
       <h3 class="text-sm font-semibold text-gray-700 mb-2">Invite</h3>
 
       <div class="flex gap-2 mb-3">

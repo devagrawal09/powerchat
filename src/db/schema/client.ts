@@ -1,4 +1,4 @@
-import { sqliteTable, text, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, index, integer } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey().notNull(),
@@ -74,6 +74,26 @@ export const agentRuns = sqliteTable(
   ],
 );
 
+export const workspaceNodes = sqliteTable(
+  "workspace_nodes",
+  {
+    id: text("id").primaryKey().notNull(),
+    channelId: text("channel_id").notNull(),
+    path: text("path").notNull(),
+    parentPath: text("parent_path"),
+    name: text("name").notNull(),
+    kind: text("kind").notNull().$type<"file" | "dir">(),
+    sizeBytes: integer("size_bytes"),
+    modifiedAt: text("modified_at").notNull(),
+  },
+  (table) => [
+    index("idx_workspace_nodes_channel_parent").on(
+      table.channelId,
+      table.parentPath,
+    ),
+  ],
+);
+
 export const isoMutations = sqliteTable(
   "iso_mutations",
   {
@@ -91,6 +111,7 @@ export const clientSchema = {
   channelMembers,
   messages,
   agentRuns,
+  workspaceNodes,
   isoMutations: {
     tableDefinition: isoMutations,
     options: { localOnly: true },

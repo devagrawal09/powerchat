@@ -78,4 +78,21 @@ export const powerSyncSchema = new Schema({
       },
     },
   ),
+  workspace_nodes: new Table(
+    {
+      channel_id: column.text,
+      path: column.text,
+      parent_path: column.text,
+      name: column.text,
+      kind: column.text,
+      size_bytes: column.integer,
+      modified_at: column.text,
+    },
+    {
+      indexes: {
+        idx_workspace_nodes_channel_parent: ["channel_id", "parent_path"],
+        idx_workspace_nodes_channel_path: ["channel_id", "path"],
+      },
+    },
+  ),
 });

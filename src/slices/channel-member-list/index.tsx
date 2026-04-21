@@ -21,37 +21,35 @@ type ChannelMemberListProps = {
 export function ChannelMemberList(props: ChannelMemberListProps) {
   const memberName = sql<string>`coalesce(${usersTable.id}, ${channelMembers.memberId})`;
 
-  const users = useQuery(
-    () =>
-      liveQuery(
-        clientDb
-          .select({
-            member_type: sql<"user">`'user'`,
-            member_id: channelMembers.memberId,
-            name: memberName,
-          })
-          .from(channelMembers)
-          .leftJoin(
-            usersTable,
-            and(
-              eq(channelMembers.memberType, "user"),
-              eq(usersTable.id, channelMembers.memberId),
-            ),
-          )
-          .where(
-            and(
-              eq(channelMembers.channelId, props.channelId),
-              eq(channelMembers.memberType, "user"),
-            ),
-          )
-          .orderBy(asc(memberName)),
-      ),
+  const users = useQuery(() =>
+    liveQuery(
+      clientDb
+        .select({
+          member_type: sql<"user">`'user'`,
+          member_id: channelMembers.memberId,
+          name: memberName,
+        })
+        .from(channelMembers)
+        .leftJoin(
+          usersTable,
+          and(
+            eq(channelMembers.memberType, "user"),
+            eq(usersTable.id, channelMembers.memberId),
+          ),
+        )
+        .where(
+          and(
+            eq(channelMembers.channelId, props.channelId),
+            eq(channelMembers.memberType, "user"),
+          ),
+        )
+        .orderBy(asc(memberName)),
+    ),
   );
 
   return (
     <>
       <h3 class="text-sm font-semibold text-gray-700 mb-3">Members</h3>
-
       <div class="text-xs font-semibold text-gray-500 uppercase mb-2">
         Users
       </div>
