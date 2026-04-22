@@ -1,6 +1,13 @@
 import { useNavigate, useParams } from "@solidjs/router";
 import { eq } from "drizzle-orm";
-import { Match, Show, Switch, createEffect, createSignal } from "solid-js";
+import {
+  Match,
+  Show,
+  Switch,
+  createEffect,
+  createSignal,
+  startTransition,
+} from "solid-js";
 import { channels, clientDb, liveQuery } from "~/db/client";
 import { useQuery } from "~/lib/powersync-solid";
 import { AgentViewer } from "~/slices/agent-viewer";
@@ -58,10 +65,12 @@ export default function ChannelPage() {
   };
 
   const handleWorkspaceFileSelect = (file: WorkspaceFileSelection) => {
-    setSelectedInspector({
-      kind: "file",
-      file,
-    });
+    startTransition(() =>
+      setSelectedInspector({
+        kind: "file",
+        file,
+      }),
+    );
   };
 
   const selectedAgentId = () => {

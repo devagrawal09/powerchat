@@ -16,9 +16,8 @@ describe("ChannelMemberList", () => {
     vi.clearAllMocks();
   });
 
-  it("renders members section", () => {
+  it("renders users", () => {
     render(() => <ChannelMemberList channelId="test-channel" />);
-    expect(screen.getByText("Members")).toBeInTheDocument();
     expect(screen.getByText("Users")).toBeInTheDocument();
   });
 

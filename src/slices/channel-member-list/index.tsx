@@ -49,7 +49,6 @@ export function ChannelMemberList(props: ChannelMemberListProps) {
 
   return (
     <>
-      <h3 class="text-sm font-semibold text-gray-700 mb-3">Members</h3>
       <div class="text-xs font-semibold text-gray-500 uppercase mb-2">
         Users
       </div>

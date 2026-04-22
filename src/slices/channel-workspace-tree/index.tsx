@@ -3,10 +3,7 @@ import {
   isLikelyViewableTextFilePath,
   type WorkspaceFileSelection,
 } from "~/lib/workspace-file-viewability";
-import {
-  type WorkspaceNodeRow,
-  useChannelWorkspaceNodes,
-} from "./useChannelWorkspaceNodes";
+import { useChannelWorkspaceNodes } from "./useChannelWorkspaceNodes";
 import { buildWorkspaceTree, type WorkspaceTreeNode } from "./tree";
 
 type ChannelWorkspaceTreeProps = {

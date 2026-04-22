@@ -14,20 +14,6 @@ type ChannelInviteProps = {
   channelId: string;
 };
 
-type AgentRow = {
-  id: string;
-  name: string;
-  description: string;
-};
-
-type MemberRow = {
-  member_id: string;
-};
-
-type UserRow = {
-  id: string;
-};
-
 export function ChannelInvite(props: ChannelInviteProps) {
   const [username, setUsername] = createSignal("");
   const [selectedAgentId, setSelectedAgentId] = createSignal<string | null>(
