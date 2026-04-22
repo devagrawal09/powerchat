@@ -2,20 +2,12 @@ import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ChannelWorkspaceTree } from "./index";
 
-const {
-  mockUseChannelWorkspaceNodes,
-  mockRefreshWorkspaceNodes,
-} = vi.hoisted(() => ({
+const { mockUseChannelWorkspaceNodes } = vi.hoisted(() => ({
   mockUseChannelWorkspaceNodes: vi.fn(),
-  mockRefreshWorkspaceNodes: vi.fn(),
 }));
 
 vi.mock("./useChannelWorkspaceNodes", () => ({
   useChannelWorkspaceNodes: mockUseChannelWorkspaceNodes,
-}));
-
-vi.mock("~/server/workspace-node-actions", () => ({
-  refreshChannelWorkspaceIndex: mockRefreshWorkspaceNodes,
 }));
 
 describe("ChannelWorkspaceTree", () => {
@@ -55,8 +47,7 @@ describe("ChannelWorkspaceTree", () => {
 
     render(() => <ChannelWorkspaceTree channelId="channel-1" />);
 
-    expect(screen.getByText("Failed to load workspace."))
-      .toBeInTheDocument();
+    expect(screen.getByText("Failed to load workspace.")).toBeInTheDocument();
     expect(screen.getByText("boom")).toBeInTheDocument();
   });
 
@@ -109,19 +100,70 @@ describe("ChannelWorkspaceTree", () => {
     });
   });
 
-  it("refreshes workspace metadata on demand", async () => {
+  it("opens supported text files and leaves binary files inert", async () => {
+    const onFileSelect = vi.fn();
+
     mockUseChannelWorkspaceNodes.mockReturnValue(() => ({
-      data: [],
+      data: [
+        {
+          id: "channel-1:docs",
+          channelId: "channel-1",
+          path: "docs",
+          parentPath: null,
+          name: "docs",
+          kind: "dir",
+          sizeBytes: null,
+          modifiedAt: "2024-01-02T03:04:05.000Z",
+        },
+        {
+          id: "channel-1:docs/readme.md",
+          channelId: "channel-1",
+          path: "docs/readme.md",
+          parentPath: "docs",
+          name: "readme.md",
+          kind: "file",
+          sizeBytes: 10,
+          modifiedAt: "2024-01-02T03:04:05.000Z",
+        },
+        {
+          id: "channel-1:image.png",
+          channelId: "channel-1",
+          path: "image.png",
+          parentPath: null,
+          name: "image.png",
+          kind: "file",
+          sizeBytes: 20,
+          modifiedAt: "2024-01-02T03:04:05.000Z",
+        },
+      ],
       isLoading: false,
     }));
-    mockRefreshWorkspaceNodes.mockResolvedValue(undefined);
 
-    render(() => <ChannelWorkspaceTree channelId="channel-1" />);
+    render(() => (
+      <ChannelWorkspaceTree
+        channelId="channel-1"
+        onFileSelect={onFileSelect}
+      />
+    ));
 
-    fireEvent.click(screen.getByRole("button", { name: "Refresh workspace" }));
+    fireEvent.click(screen.getByRole("button", { name: "Toggle docs" }));
 
     await waitFor(() => {
-      expect(mockRefreshWorkspaceNodes).toHaveBeenCalledWith("channel-1");
+      expect(
+        screen.getByRole("button", { name: "readme.md" }),
+      ).toBeInTheDocument();
     });
+
+    fireEvent.click(screen.getByRole("button", { name: "readme.md" }));
+
+    expect(onFileSelect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "docs/readme.md",
+        name: "readme.md",
+      }),
+    );
+    expect(
+      screen.queryByRole("button", { name: "image.png" }),
+    ).not.toBeInTheDocument();
   });
 });

@@ -1,5 +1,8 @@
 import { For, Match, Show, Switch, createMemo, createSignal } from "solid-js";
-import { refreshChannelWorkspaceIndex } from "~/server/workspace-node-actions";
+import {
+  isLikelyViewableTextFilePath,
+  type WorkspaceFileSelection,
+} from "~/lib/workspace-file-viewability";
 import {
   type WorkspaceNodeRow,
   useChannelWorkspaceNodes,
@@ -8,42 +11,59 @@ import { buildWorkspaceTree, type WorkspaceTreeNode } from "./tree";
 
 type ChannelWorkspaceTreeProps = {
   channelId: string;
+  onFileSelect?: (file: WorkspaceFileSelection) => void;
 };
-
-function formatNodeMeta(node: WorkspaceNodeRow) {
-  if (node.kind === "dir") {
-    return "Folder";
-  }
-
-  return node.sizeBytes == null ? "File" : `${node.sizeBytes} B`;
-}
-
-function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
-}
 
 type WorkspaceTreeBranchProps = {
   node: WorkspaceTreeNode;
   depth: number;
   expandedPaths: Set<string>;
   onToggle: (path: string) => void;
+  onFileSelect?: (file: WorkspaceFileSelection) => void;
 };
 
 function WorkspaceTreeBranch(props: WorkspaceTreeBranchProps) {
   const isExpanded = () => props.expandedPaths.has(props.node.path);
   const paddingLeft = () => `${props.depth * 0.75}rem`;
+  const isViewableTextFile = () =>
+    props.node.kind === "file" && isLikelyViewableTextFilePath(props.node.path);
+
+  const handleFileClick = () => {
+    if (!isViewableTextFile()) {
+      return;
+    }
+
+    props.onFileSelect?.({
+      path: props.node.path,
+      name: props.node.name,
+    });
+  };
 
   return (
     <div>
       <Show
         when={props.node.kind === "dir"}
         fallback={
-          <div
-            class="flex items-center justify-between gap-2 rounded px-2 py-1 text-sm text-gray-700"
-            style={{ "padding-left": paddingLeft() }}
+          <Show
+            when={isViewableTextFile()}
+            fallback={
+              <div
+                class="flex items-center justify-between gap-2 rounded px-2 py-1 text-sm text-gray-700"
+                style={{ "padding-left": paddingLeft() }}
+              >
+                <span class="truncate">{props.node.name}</span>
+              </div>
+            }
           >
-            <span class="truncate">{props.node.name}</span>
-          </div>
+            <button
+              type="button"
+              class="flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left text-sm text-gray-700 hover:bg-gray-50"
+              style={{ "padding-left": paddingLeft() }}
+              onClick={handleFileClick}
+            >
+              <span class="truncate">{props.node.name}</span>
+            </button>
+          </Show>
         }
       >
         <button
@@ -72,6 +92,7 @@ function WorkspaceTreeBranch(props: WorkspaceTreeBranchProps) {
                 depth={props.depth + 1}
                 expandedPaths={props.expandedPaths}
                 onToggle={props.onToggle}
+                onFileSelect={props.onFileSelect}
               />
             )}
           </For>
@@ -86,8 +107,6 @@ export function ChannelWorkspaceTree(props: ChannelWorkspaceTreeProps) {
   const [expandedPaths, setExpandedPaths] = createSignal<Set<string>>(
     new Set(),
   );
-  const [isRefreshing, setIsRefreshing] = createSignal(false);
-  const [refreshError, setRefreshError] = createSignal<string | null>(null);
   const tree = createMemo(() => buildWorkspaceTree(workspaceNodes().data));
 
   const togglePath = (targetPath: string) => {
@@ -102,40 +121,13 @@ export function ChannelWorkspaceTree(props: ChannelWorkspaceTreeProps) {
     });
   };
 
-  const handleRefresh = async () => {
-    setRefreshError(null);
-    setIsRefreshing(true);
-
-    try {
-      await refreshChannelWorkspaceIndex(props.channelId);
-      await workspaceNodes().refresh?.();
-    } catch (error) {
-      setRefreshError(getErrorMessage(error));
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
   return (
     <section class="mt-4">
       <div class="flex items-center justify-between gap-2">
         <div class="text-xs font-semibold text-gray-500 uppercase mb-2">
           Workspace
         </div>
-        <button
-          type="button"
-          class="rounded border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-          aria-label="Refresh workspace"
-          disabled={isRefreshing()}
-          onClick={handleRefresh}
-        >
-          {isRefreshing() ? "Refreshing…" : "Refresh"}
-        </button>
       </div>
-
-      <Show when={refreshError()}>
-        {(message) => <p class="mb-2 text-xs text-red-600">{message()}</p>}
-      </Show>
 
       <Switch>
         <Match when={workspaceNodes().error}>
@@ -169,6 +161,7 @@ export function ChannelWorkspaceTree(props: ChannelWorkspaceTreeProps) {
                 depth={0}
                 expandedPaths={expandedPaths()}
                 onToggle={togglePath}
+                onFileSelect={props.onFileSelect}
               />
             )}
           </For>

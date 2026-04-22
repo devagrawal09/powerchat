@@ -1,25 +1,37 @@
-import { eq } from "drizzle-orm";
-import { channels, clientDb, liveQuery } from "~/db/client";
-import { Show, createEffect, createSignal } from "solid-js";
 import { useNavigate, useParams } from "@solidjs/router";
-import { ChannelMemberList } from "~/slices/channel-member-list";
-import { ChannelAgentsList } from "~/slices/channel-agents-list";
-import { ChannelInvite } from "~/slices/channel-invite";
-import { ChannelHeader } from "~/slices/channel-header";
-import { CreateAgent } from "~/slices/create-agent";
-import { ChatMessages } from "~/slices/chat-messages";
-import { ChatInput } from "~/slices/chat-input";
-import { AgentViewer } from "~/slices/agent-viewer";
-import { ChannelWorkspaceTree } from "~/slices/channel-workspace-tree";
+import { eq } from "drizzle-orm";
+import { Match, Show, Switch, createEffect, createSignal } from "solid-js";
+import { channels, clientDb, liveQuery } from "~/db/client";
 import { useQuery } from "~/lib/powersync-solid";
+import { AgentViewer } from "~/slices/agent-viewer";
+import { ChannelAgentsList } from "~/slices/channel-agents-list";
+import { ChannelHeader } from "~/slices/channel-header";
+import { ChannelInvite } from "~/slices/channel-invite";
+import { ChannelMemberList } from "~/slices/channel-member-list";
+import { ChannelWorkspaceTree } from "~/slices/channel-workspace-tree";
+import { ChatInput } from "~/slices/chat-input";
+import { ChatMessages } from "~/slices/chat-messages";
+import { CreateAgent } from "~/slices/create-agent";
+import { WorkspaceFileViewer } from "~/slices/workspace-file-viewer";
+import type { WorkspaceFileSelection } from "~/lib/workspace-file-viewability";
+
+type ChannelInspectorState =
+  | {
+      kind: "agent";
+      agentId: string;
+    }
+  | {
+      kind: "file";
+      file: WorkspaceFileSelection;
+    }
+  | null;
 
 export default function ChannelPage() {
   const params = useParams();
   const channelIdParam = () => params.id ?? "";
   const navigate = useNavigate();
-  const [selectedAgentId, setSelectedAgentId] = createSignal<string | null>(
-    null,
-  );
+  const [selectedInspector, setSelectedInspector] =
+    createSignal<ChannelInspectorState>(null);
 
   const channel = useQuery(() =>
     liveQuery(
@@ -39,11 +51,31 @@ export default function ChannelPage() {
   });
 
   const handleAgentClick = (agentId: string) => {
-    setSelectedAgentId(agentId);
+    setSelectedInspector({
+      kind: "agent",
+      agentId,
+    });
   };
 
-  const handleCloseAgent = () => {
-    setSelectedAgentId(null);
+  const handleWorkspaceFileSelect = (file: WorkspaceFileSelection) => {
+    setSelectedInspector({
+      kind: "file",
+      file,
+    });
+  };
+
+  const selectedAgentId = () => {
+    const inspector = selectedInspector();
+    return inspector?.kind === "agent" ? inspector.agentId : null;
+  };
+
+  const selectedFilePath = () => {
+    const inspector = selectedInspector();
+    return inspector?.kind === "file" ? inspector.file.path : null;
+  };
+
+  const handleCloseInspector = () => {
+    setSelectedInspector(null);
   };
 
   return (
@@ -60,18 +92,31 @@ export default function ChannelPage() {
               </div>
             </div>
 
-            <Show when={selectedAgentId()}>
+            <Show when={selectedInspector()}>
               <div class="w-96 border-l border-gray-200 bg-white min-w-0">
-                <Show when={selectedAgentId()}>
-                  {(id) => (
-                    <AgentViewer agentId={id()} onClose={handleCloseAgent} />
-                  )}
-                </Show>
+                <Switch>
+                  <Match when={selectedAgentId()}>
+                    {(agentId) => (
+                      <AgentViewer
+                        agentId={agentId()}
+                        onClose={handleCloseInspector}
+                      />
+                    )}
+                  </Match>
+                  <Match when={selectedFilePath()}>
+                    {(filePath) => (
+                      <WorkspaceFileViewer
+                        channelId={channelId()}
+                        filePath={filePath()}
+                        onClose={handleCloseInspector}
+                      />
+                    )}
+                  </Match>
+                </Switch>
               </div>
             </Show>
           </div>
 
-          {/* Right sidebar */}
           <div class="w-64 border-l border-gray-200 bg-white flex flex-col">
             <div class="flex-1 overflow-y-auto p-4">
               <ChannelMemberList channelId={channelId()} />
@@ -79,7 +124,10 @@ export default function ChannelPage() {
                 channelId={channelId()}
                 onAgentClick={handleAgentClick}
               />
-              <ChannelWorkspaceTree channelId={channelId()} />
+              <ChannelWorkspaceTree
+                channelId={channelId()}
+                onFileSelect={handleWorkspaceFileSelect}
+              />
             </div>
             <CreateAgent channelId={channelId()} />
             <div class="p-4 border-t border-gray-200">

@@ -134,7 +134,6 @@ Default dev server:
    - inspect members
    - inspect agents
    - inspect live workspace filesystem metadata for channel
-6. Click refresh in Workspace section if you need to force a full filesystem rescan
 
 ## Workspace filesystem metadata
 
