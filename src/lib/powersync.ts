@@ -8,35 +8,10 @@ import {
 import {
   DrizzleAppSchema,
   wrapPowerSyncWithDrizzle,
-  type PowerSyncSQLiteDatabase,
 } from "@powersync/drizzle-driver";
-import {
-  uploadData as uploadToServer,
-} from "~/server/powersync";
+import { uploadData as uploadToServer } from "~/server/powersync";
 import { getPowerSyncToken } from "~/server/powersync-token";
 import { clientSchema } from "~/db/schema/client";
-
-const isTestEnv =
-  import.meta.env.MODE === "test" || process.env.VITEST === "true";
-
-function createTestClientDb(): PowerSyncSQLiteDatabase<typeof clientSchema> {
-  const lockContext = {
-    execute: async () => undefined,
-    getAll: async () => [],
-    get: async () => null,
-    getOptional: async () => null,
-  };
-
-  const testDb = {
-    readLock: async (callback: (ctx: typeof lockContext) => unknown) =>
-      callback(lockContext),
-    writeLock: async (callback: (ctx: typeof lockContext) => unknown) =>
-      callback(lockContext),
-    watch: () => {},
-  } as any;
-
-  return wrapPowerSyncWithDrizzle(testDb, { schema: clientSchema });
-}
 
 // PowerSync connector using SolidStart server functions
 class PowerChatConnector implements PowerSyncBackendConnector {
@@ -44,6 +19,11 @@ class PowerChatConnector implements PowerSyncBackendConnector {
     console.log("[fetchCredentials] start");
     const { token, expiresAt } = await getPowerSyncToken();
     const endpoint = import.meta.env.VITE_POWERSYNC_SERVICE_URL;
+
+    if (!endpoint) {
+      throw new Error("VITE_POWERSYNC_SERVICE_URL not set");
+    }
+
     return { endpoint, token, expiresAt: new Date(expiresAt) };
   }
 
@@ -88,17 +68,13 @@ class PowerChatConnector implements PowerSyncBackendConnector {
 
 export const powerSyncSchema = new DrizzleAppSchema(clientSchema);
 
-export const powersync = isTestEnv
-  ? ({} as PowerSyncDatabase)
-  : new PowerSyncDatabase({
-      schema: powerSyncSchema,
-      database: { dbFilename: "powerchat.db" },
-    });
-export const clientDb = isTestEnv
-  ? createTestClientDb()
-  : wrapPowerSyncWithDrizzle(powersync, {
-      schema: clientSchema,
-    });
+export const powersync = new PowerSyncDatabase({
+  schema: powerSyncSchema,
+  database: { dbFilename: "powerchat.db" },
+});
+export const clientDb = wrapPowerSyncWithDrizzle(powersync, {
+  schema: clientSchema,
+});
 const connector = new PowerChatConnector();
 
 const logger = createBaseLogger();
@@ -108,11 +84,6 @@ let isInitialized = false;
 
 export async function connectPowerSync() {
   if (isInitialized) {
-    return;
-  }
-
-  if (isTestEnv) {
-    isInitialized = true;
     return;
   }
 

@@ -54,33 +54,32 @@ export function ChatInput(props: ChatInputProps) {
     };
   });
 
-  const members = useQuery(
-    () =>
-      liveQuery(
-        clientDb
-          .select({
-            member_type: channelMembers.memberType,
-            member_id: channelMembers.memberId,
-            name: memberName,
-          })
-          .from(channelMembers)
-          .leftJoin(
-            users,
-            and(
-              eq(channelMembers.memberType, "user"),
-              eq(users.id, channelMembers.memberId),
-            ),
-          )
-          .leftJoin(
-            agents,
-            and(
-              eq(channelMembers.memberType, "agent"),
-              eq(agents.id, channelMembers.memberId),
-            ),
-          )
-          .where(eq(channelMembers.channelId, props.channelId))
-          .orderBy(asc(channelMembers.memberType), asc(memberName)),
-      ),
+  const members = useQuery(() =>
+    liveQuery(
+      clientDb
+        .select({
+          member_type: channelMembers.memberType,
+          member_id: channelMembers.memberId,
+          name: memberName,
+        })
+        .from(channelMembers)
+        .leftJoin(
+          users,
+          and(
+            eq(channelMembers.memberType, "user"),
+            eq(users.id, channelMembers.memberId),
+          ),
+        )
+        .leftJoin(
+          agents,
+          and(
+            eq(channelMembers.memberType, "agent"),
+            eq(agents.id, channelMembers.memberId),
+          ),
+        )
+        .where(eq(channelMembers.channelId, props.channelId))
+        .orderBy(asc(channelMembers.memberType), asc(memberName)),
+    ),
   );
 
   function fuzzyMatch(text: string, query: string): boolean {
@@ -137,7 +136,9 @@ export function ChatInput(props: ChatInputProps) {
     if (!state.isOpen) return;
 
     const before = content().slice(0, state.cursorPosition);
-    const after = content().slice(state.cursorPosition + state.query.length + 1);
+    const after = content().slice(
+      state.cursorPosition + state.query.length + 1,
+    );
     setContent(before + "@" + option.name + " " + after);
     setActiveMentionIndex(0);
 
@@ -201,7 +202,8 @@ export function ChatInput(props: ChatInputProps) {
                 if (e.key === "ArrowDown") {
                   e.preventDefault();
                   let next = activeMentionIndex() + 1;
-                  while (next < options.length && isOptionDisabled(next)) next += 1;
+                  while (next < options.length && isOptionDisabled(next))
+                    next += 1;
                   if (next < options.length) setActiveMentionIndex(next);
                 } else if (e.key === "ArrowUp") {
                   e.preventDefault();
@@ -252,14 +254,6 @@ export function ChatInput(props: ChatInputProps) {
           Send
         </button>
       </div>
-      {hasAgent() && (
-        <div class="mt-1 flex items-center gap-1">
-          <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
-            <span class="w-1.5 h-1.5 rounded-full bg-purple-500" />
-            Agent: {effectiveSelectedAgent()!.name}
-          </span>
-        </div>
-      )}
     </div>
   );
 }
