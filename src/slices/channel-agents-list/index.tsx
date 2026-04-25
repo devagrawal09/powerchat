@@ -81,7 +81,7 @@ export function ChannelAgentsList(props: ChannelAgentsListProps) {
 
   return (
     <>
-      <div class="text-xs font-semibold text-gray-500 uppercase mt-4 mb-2">
+      <div class="text-xs font-semibold text-gray-500 uppercase mb-2">
         Agents
       </div>
       <Show when={!agents().isLoading}>

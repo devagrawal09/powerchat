@@ -52,7 +52,10 @@ async function hasChannelWorkspaceAccess(channelId: string, username: string) {
   return membershipRows.length > 0 || creatorRows.length > 0;
 }
 
-function isPathInsideWorkspaceRoot(workspaceRootPath: string, candidatePath: string) {
+function isPathInsideWorkspaceRoot(
+  workspaceRootPath: string,
+  candidatePath: string,
+) {
   const relativePath = path.relative(workspaceRootPath, candidatePath);
   return (
     relativePath !== "" &&
@@ -90,7 +93,9 @@ export async function readWorkspaceTextFileForUser(
   input: ReadWorkspaceTextFileInput,
   options: ReadWorkspaceTextFileOptions = {},
 ): Promise<WorkspaceTextFileSnapshot> {
-  const normalizedRelativePath = normalizeWorkspaceRelativePath(input.relativePath);
+  const normalizedRelativePath = normalizeWorkspaceRelativePath(
+    input.relativePath,
+  );
   const hasChannelAccess =
     options.hasChannelAccess ?? hasChannelWorkspaceAccess;
 

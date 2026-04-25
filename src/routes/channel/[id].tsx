@@ -6,6 +6,7 @@ import {
   Switch,
   createEffect,
   createSignal,
+  For,
   startTransition,
 } from "solid-js";
 import { channels, clientDb, liveQuery } from "~/db/client";
@@ -33,12 +34,16 @@ type ChannelInspectorState =
     }
   | null;
 
+type RightTab = "members" | "agents" | "workspace";
+
 export default function ChannelPage() {
   const params = useParams();
   const channelIdParam = () => params.id ?? "";
   const navigate = useNavigate();
   const [selectedInspector, setSelectedInspector] =
     createSignal<ChannelInspectorState>(null);
+  const [activeTab, setActiveTab] = createSignal<RightTab>("members");
+  const [showCreateAgent, setShowCreateAgent] = createSignal(false);
 
   const channel = useQuery(() =>
     liveQuery(
@@ -58,10 +63,12 @@ export default function ChannelPage() {
   });
 
   const handleAgentClick = (agentId: string) => {
-    setSelectedInspector({
-      kind: "agent",
-      agentId,
-    });
+    startTransition(() =>
+      setSelectedInspector({
+        kind: "agent",
+        agentId,
+      }),
+    );
   };
 
   const handleWorkspaceFileSelect = (file: WorkspaceFileSelection) => {
@@ -87,11 +94,17 @@ export default function ChannelPage() {
     setSelectedInspector(null);
   };
 
+  const tabs: { id: RightTab; label: string }[] = [
+    { id: "members", label: "Members" },
+    { id: "agents", label: "Agents" },
+    { id: "workspace", label: "Workspace" },
+  ];
+
   return (
     <Show when={params.id}>
       {(channelId) => (
-        <div class="flex-1 flex h-full">
-          <div class="flex-1 flex min-w-0">
+        <div class="flex-1 flex h-full overflow-hidden">
+          <div class="flex-1 flex min-w-0 overflow-hidden">
             <div class="flex-1 flex flex-col min-w-0">
               <ChannelHeader channelId={channelId()} />
 
@@ -126,23 +139,71 @@ export default function ChannelPage() {
             </Show>
           </div>
 
+          {/* Right sidebar with tabs */}
           <div class="w-64 border-l border-gray-200 bg-white flex flex-col">
-            <div class="flex-1 overflow-y-auto p-4">
-              <ChannelMemberList channelId={channelId()} />
-              <ChannelAgentsList
-                channelId={channelId()}
-                onAgentClick={handleAgentClick}
-              />
-              <ChannelWorkspaceTree
-                channelId={channelId()}
-                onFileSelect={handleWorkspaceFileSelect}
-              />
+            {/* Tab bar */}
+            <div class="h-12 flex items-end border-b border-gray-200 shrink-0">
+              <For each={tabs}>
+                {(tab) => (
+                  <button
+                    type="button"
+                    onClick={() => startTransition(() => setActiveTab(tab.id))}
+                    class={`flex-1 px-2 py-2.5 text-xs font-medium transition-colors relative ${
+                      activeTab() === tab.id
+                        ? "text-blue-600"
+                        : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    {tab.label}
+                    <Show when={activeTab() === tab.id}>
+                      <div class="absolute bottom-0 left-2 right-2 h-0.5 bg-blue-600 rounded-full" />
+                    </Show>
+                  </button>
+                )}
+              </For>
             </div>
-            <CreateAgent channelId={channelId()} />
-            <div class="p-4 border-t border-gray-200">
-              <ChannelInvite channelId={channelId()} />
+
+            {/* Tab content */}
+            <div class="flex-1 overflow-y-auto p-4">
+              <Show when={activeTab() === "members"}>
+                <ChannelMemberList channelId={channelId()} />
+                <div class="mt-4 pt-4 border-t border-gray-100">
+                  <ChannelInvite channelId={channelId()} />
+                </div>
+              </Show>
+
+              <Show when={activeTab() === "agents"}>
+                <ChannelAgentsList
+                  channelId={channelId()}
+                  onAgentClick={handleAgentClick}
+                />
+                <div class="mt-4 pt-4 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateAgent(true)}
+                    class="btn btn-primary w-full py-2"
+                  >
+                    Create Agent
+                  </button>
+                </div>
+              </Show>
+
+              <Show when={activeTab() === "workspace"}>
+                <ChannelWorkspaceTree
+                  channelId={channelId()}
+                  onFileSelect={handleWorkspaceFileSelect}
+                />
+              </Show>
             </div>
           </div>
+
+          {/* Create Agent Modal */}
+          <Show when={showCreateAgent()}>
+            <CreateAgent
+              channelId={channelId()}
+              onClose={() => setShowCreateAgent(false)}
+            />
+          </Show>
         </div>
       )}
     </Show>

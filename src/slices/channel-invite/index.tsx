@@ -68,7 +68,6 @@ export function ChannelInvite(props: ChannelInviteProps) {
     ),
   );
 
-  // Filter out agents already in channel
   const availableAgents = createMemo(() => {
     const inChannel = new Set(
       channelAgents().data?.map((a) => a.member_id) || [],
@@ -86,7 +85,6 @@ export function ChannelInvite(props: ChannelInviteProps) {
       return;
     }
 
-    // Verify current user is a member of the channel
     const currentUserIsMember = (channelMembers().data || []).find(
       (m) => m.member_id === currentUser,
     );
@@ -98,14 +96,12 @@ export function ChannelInvite(props: ChannelInviteProps) {
       return;
     }
 
-    // Check if user exists
     const userExists = (allUsers().data || []).find((u) => u.id === value);
     if (!userExists) {
       setMessage({ type: "error", text: "User not found" });
       return;
     }
 
-    // Check if user is already a member
     const isMember = (channelMembers().data || []).find(
       (m) => m.member_id === value,
     );
@@ -151,7 +147,6 @@ export function ChannelInvite(props: ChannelInviteProps) {
       return;
     }
 
-    // Verify current user is a member of the channel
     const currentUserIsMember = (channelMembers().data || []).find(
       (m) => m.member_id === currentUser,
     );
@@ -163,14 +158,12 @@ export function ChannelInvite(props: ChannelInviteProps) {
       return;
     }
 
-    // Check if agent exists
     const agentExists = (allAgents().data || []).find((a) => a.id === agentId);
     if (!agentExists) {
       setMessage({ type: "error", text: "Agent not found" });
       return;
     }
 
-    // Check if agent is already a member
     const isMember = (channelMembers().data || []).find(
       (m) => m.member_id === agentId,
     );
@@ -210,26 +203,26 @@ export function ChannelInvite(props: ChannelInviteProps) {
   };
 
   return (
-    <div class="p-2">
-      <h3 class="text-sm font-semibold text-gray-700 mb-2">Invite</h3>
+    <div>
+      <h3 class="text-xs font-semibold text-gray-500 uppercase mb-2">Invite</h3>
 
-      <div class="flex gap-2 mb-3">
+      <div class="flex gap-1 mb-3 bg-gray-100 rounded-md p-0.5">
         <button
           onClick={() => setInviteType("user")}
-          class={`flex-1 px-3 py-1 text-xs rounded ${
+          class={`flex-1 px-3 py-1.5 text-xs rounded font-medium transition-all ${
             inviteType() === "user"
-              ? "bg-blue-600 text-white"
-              : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+              ? "bg-white text-gray-900 shadow-sm"
+              : "text-gray-500 hover:text-gray-700"
           }`}
         >
           User
         </button>
         <button
           onClick={() => setInviteType("agent")}
-          class={`flex-1 px-3 py-1 text-xs rounded ${
+          class={`flex-1 px-3 py-1.5 text-xs rounded font-medium transition-all ${
             inviteType() === "agent"
-              ? "bg-blue-600 text-white"
-              : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+              ? "bg-white text-gray-900 shadow-sm"
+              : "text-gray-500 hover:text-gray-700"
           }`}
         >
           Agent
@@ -243,7 +236,7 @@ export function ChannelInvite(props: ChannelInviteProps) {
             value={username()}
             onInput={(e) => setUsername(e.currentTarget.value)}
             placeholder="Enter username"
-            class="w-full px-3 py-2 border border-gray-300 rounded text-sm text-gray-900 placeholder-gray-400 bg-white"
+            class="input text-sm"
             disabled={submitting()}
           />
 
@@ -262,7 +255,7 @@ export function ChannelInvite(props: ChannelInviteProps) {
           <button
             type="submit"
             disabled={submitting() || !username().trim()}
-            class="w-full px-3 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="btn btn-primary w-full py-2"
           >
             {submitting() ? "Adding..." : "Add User"}
           </button>
@@ -290,7 +283,7 @@ export function ChannelInvite(props: ChannelInviteProps) {
                 onChange={(e) =>
                   setSelectedAgentId(e.currentTarget.value || null)
                 }
-                class="w-full px-3 py-2 border border-gray-300 rounded text-sm text-gray-900 bg-white"
+                class="input text-sm"
                 disabled={submitting()}
               >
                 <option value="">Select an agent</option>
@@ -316,7 +309,7 @@ export function ChannelInvite(props: ChannelInviteProps) {
           <button
             onClick={handleInviteAgent}
             disabled={submitting() || !selectedAgentId()}
-            class="w-full px-3 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="btn btn-primary w-full py-2"
           >
             {submitting() ? "Adding..." : "Add Agent"}
           </button>

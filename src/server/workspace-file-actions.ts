@@ -8,7 +8,6 @@ export async function readChannelWorkspaceTextFile(
   relativePath: string,
 ) {
   const username = getRequestUsername();
-
   return readWorkspaceTextFileForUser({
     channelId,
     relativePath,

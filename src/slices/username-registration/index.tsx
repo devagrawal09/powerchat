@@ -3,10 +3,7 @@ import { clientDb, liveQuery, users } from "~/db/client";
 import { createSignal, Show } from "solid-js";
 import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 import { useSession } from "~/lib/session";
-
-type UserRow = {
-  id: string;
-};
+import { connectPowerSync } from "~/lib/powersync";
 
 export function UsernameRegistration(props: {
   onSuccess: (username: string) => void;
@@ -44,9 +41,8 @@ export function UsernameRegistration(props: {
       return;
     }
 
-    // Check for duplicate username
     const duplicate = (existingUsers().data || []).find(
-      (u) => u.id.toLowerCase() === value.toLowerCase()
+      (u) => u.id.toLowerCase() === value.toLowerCase(),
     );
     if (duplicate) {
       setError("Username already taken");
@@ -57,11 +53,12 @@ export function UsernameRegistration(props: {
     setSubmitting(true);
 
     try {
-      const now = new Date().toISOString();
+      session.setUsername(value);
+      await connectPowerSync();
 
+      const now = new Date().toISOString();
       await clientDb.insert(users).values({ id: value, createdAt: now });
 
-      session.setUsername(value);
       props.onSuccess(value);
     } catch (err: any) {
       console.error("[UsernameRegistration] Error:", err);
@@ -72,12 +69,28 @@ export function UsernameRegistration(props: {
   };
 
   return (
-    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h2 class="text-2xl font-bold text-gray-900 mb-2">
+    <div
+      class="fixed inset-0 flex items-center justify-center z-50"
+      style={{
+        background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
+        "background-size": "cover",
+      }}
+    >
+      {/* Subtle grid overlay */}
+      <div
+        class="absolute inset-0 opacity-[0.07]"
+        style={{
+          "background-image":
+            "linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px)",
+          "background-size": "40px 40px",
+        }}
+      />
+
+      <div class="relative bg-white rounded-xl shadow-2xl p-8 max-w-md w-full mx-4">
+        <h2 class="text-2xl font-bold text-gray-900 mb-1">
           Welcome to PowerChat
         </h2>
-        <p class="text-gray-600 mb-4">Choose a username to get started</p>
+        <p class="text-gray-500 mb-6">Choose a username to get started</p>
 
         <form onSubmit={handleSubmit}>
           <input
@@ -85,7 +98,7 @@ export function UsernameRegistration(props: {
             value={username()}
             onInput={(e) => setUsername(e.currentTarget.value)}
             placeholder="Enter username"
-            class="w-full px-4 py-2 border border-gray-300 rounded text-gray-900 placeholder-gray-400 mb-2"
+            class="input mb-3"
             disabled={submitting()}
             autofocus
           />
@@ -97,15 +110,14 @@ export function UsernameRegistration(props: {
           <button
             type="submit"
             disabled={submitting() || username().trim().length < 3}
-            class="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="btn btn-primary w-full py-2.5"
           >
             {submitting() ? "Creating..." : "Continue"}
           </button>
         </form>
 
-        <p class="text-xs text-gray-500 mt-4">
-          Username must be 3-30 characters and can only contain letters,
-          numbers, hyphens, and underscores.
+        <p class="text-xs text-gray-400 mt-4 text-center">
+          Username must be 3-30 characters: letters, numbers, hyphens, and underscores.
         </p>
       </div>
     </div>

@@ -100,7 +100,7 @@ function WorkspaceTreeBranch(props: WorkspaceTreeBranchProps) {
 }
 
 export function ChannelWorkspaceTree(props: ChannelWorkspaceTreeProps) {
-  const workspaceNodes = useChannelWorkspaceNodes(props.channelId);
+  const workspaceNodes = useChannelWorkspaceNodes(() => props.channelId);
   const [expandedPaths, setExpandedPaths] = createSignal<Set<string>>(
     new Set(),
   );
@@ -119,7 +119,7 @@ export function ChannelWorkspaceTree(props: ChannelWorkspaceTreeProps) {
   };
 
   return (
-    <section class="mt-4">
+    <section>
       <div class="flex items-center justify-between gap-2">
         <div class="text-xs font-semibold text-gray-500 uppercase mb-2">
           Workspace

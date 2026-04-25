@@ -1,18 +1,14 @@
-import { For, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
 import { A } from "@solidjs/router";
 import { asc } from "drizzle-orm";
 import { channels, clientDb, liveQuery } from "~/db/client";
 import { DeleteChannel } from "~/slices/delete-channel";
 import { useQuery } from "~/lib/powersync-solid";
-
-type ChannelRow = {
-  id: string;
-  name: string;
-  created_by: string | null;
-  created_at: string;
-};
+import { ChannelListHeader, CreateChannel } from "~/slices/create-channel";
 
 export function ChannelList() {
+  const [showCreate, setShowCreate] = createSignal(false);
+
   const channelsQuery = useQuery(() =>
     liveQuery(
       clientDb
@@ -29,9 +25,10 @@ export function ChannelList() {
 
   return (
     <div class="flex-1 overflow-y-auto p-2">
-      <div class="text-xs font-semibold text-gray-500 uppercase px-2 mb-2">
-        Channels
-      </div>
+      <ChannelListHeader onAdd={() => setShowCreate((v) => !v)} />
+      <Show when={showCreate()}>
+        <CreateChannel onCreated={() => setShowCreate((v) => !v)} />
+      </Show>
       <Show
         when={!channelsQuery().isLoading}
         fallback={<div class="px-2 text-sm text-gray-500">Loading...</div>}
@@ -41,12 +38,15 @@ export function ChannelList() {
             <div class="flex items-center group">
               <A
                 href={`/channel/${channel.id}`}
-                class="flex-1 px-2 py-1.5 rounded hover:bg-gray-100 text-sm text-gray-900"
-                activeClass="bg-blue-50 text-blue-600"
+                class="flex-1 px-2 py-1.5 rounded hover:bg-gray-100 text-sm text-gray-900 transition-colors"
+                activeClass="!bg-blue-50 !text-blue-600 font-medium"
               >
                 # {channel.name}
               </A>
-              <DeleteChannel channelId={channel.id} />
+              <DeleteChannel
+                channelId={channel.id}
+                channelName={channel.name}
+              />
             </div>
           )}
         </For>

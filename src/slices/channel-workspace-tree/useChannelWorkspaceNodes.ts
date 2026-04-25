@@ -13,7 +13,7 @@ export type WorkspaceNodeRow = {
   modifiedAt: string;
 };
 
-export function useChannelWorkspaceNodes(channelId: string) {
+export function useChannelWorkspaceNodes(channelId: () => string) {
   return useQuery<WorkspaceNodeRow>(() =>
     liveQuery(
       clientDb
@@ -28,7 +28,7 @@ export function useChannelWorkspaceNodes(channelId: string) {
           modifiedAt: workspaceNodes.modifiedAt,
         })
         .from(workspaceNodes)
-        .where(eq(workspaceNodes.channelId, channelId))
+        .where(eq(workspaceNodes.channelId, channelId()))
         .orderBy(asc(workspaceNodes.path)),
     ),
   );

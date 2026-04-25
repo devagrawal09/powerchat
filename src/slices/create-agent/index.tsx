@@ -5,16 +5,11 @@ import { useQuery } from "~/lib/powersync-solid/hooks/useQuery";
 
 type CreateAgentProps = {
   channelId: string;
+  onClose: () => void;
   onSuccess?: () => void;
 };
 
-type AgentRow = {
-  id: string;
-  name: string;
-};
-
 export function CreateAgent(props: CreateAgentProps) {
-  const [isOpen, setIsOpen] = createSignal(false);
   const [name, setName] = createSignal("");
   const [systemInstructions, setSystemInstructions] = createSignal("");
   const [description, setDescription] = createSignal("");
@@ -62,7 +57,6 @@ export function CreateAgent(props: CreateAgentProps) {
       return;
     }
 
-    // Check for duplicate agent name
     const duplicate = (existingAgents().data || []).find(
       (a) => a.name.toLowerCase() === trimmedName.toLowerCase()
     );
@@ -88,14 +82,10 @@ export function CreateAgent(props: CreateAgentProps) {
       });
 
       setMessage({ type: "success", text: `Agent "${trimmedName}" created!` });
-      setName("");
-      setSystemInstructions("");
-      setDescription("");
       setTimeout(() => {
-        setIsOpen(false);
-        setMessage(null);
+        props.onClose();
         props.onSuccess?.();
-      }, 2000);
+      }, 1500);
     } catch (err: any) {
       setMessage({
         type: "error",
@@ -107,93 +97,107 @@ export function CreateAgent(props: CreateAgentProps) {
   };
 
   return (
-    <div class="p-4 border-t border-gray-200">
-      <Show
-        when={isOpen()}
-        fallback={
+    <div
+      class="fixed inset-0 z-50 flex items-center justify-center"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) props.onClose();
+      }}
+    >
+      {/* Backdrop */}
+      <div class="absolute inset-0 bg-black/40" />
+
+      {/* Modal */}
+      <div class="relative bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg mx-4">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-gray-900">Create Agent</h3>
           <button
-            onClick={() => setIsOpen(true)}
-            class="w-full px-3 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+            type="button"
+            onClick={props.onClose}
+            class="btn-ghost w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600"
           >
-            Create Agent
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <line x1="4" y1="4" x2="12" y2="12" />
+              <line x1="12" y1="4" x2="4" y2="12" />
+            </svg>
           </button>
-        }
-      >
-        <div>
-          <h3 class="text-sm font-semibold text-gray-700 mb-2">Create Agent</h3>
-          <form onSubmit={handleSubmit} class="space-y-2">
+        </div>
+
+        <form onSubmit={handleSubmit} class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
             <input
               type="text"
               value={name()}
               onInput={(e) => setName(e.currentTarget.value)}
-              placeholder="Agent name"
-              class="w-full px-3 py-2 border border-gray-300 rounded text-sm text-gray-900 placeholder-gray-400 bg-white"
+              placeholder="e.g. code-reviewer"
+              class="input"
               disabled={submitting()}
+              autofocus
               required
             />
+          </div>
 
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">System Instructions</label>
             <textarea
               value={systemInstructions()}
               onInput={(e) => setSystemInstructions(e.currentTarget.value)}
-              placeholder="System instructions"
+              placeholder="What should this agent do?"
               rows={4}
-              class="w-full px-3 py-2 border border-gray-300 rounded text-sm text-gray-900 placeholder-gray-400 bg-white resize-none"
+              class="input resize-none"
               disabled={submitting()}
               required
             />
+          </div>
 
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
             <textarea
               value={description()}
               onInput={(e) => setDescription(e.currentTarget.value)}
-              placeholder="Description (visible to other agents)"
+              placeholder="Brief description visible to other agents"
               rows={2}
-              class="w-full px-3 py-2 border border-gray-300 rounded text-sm text-gray-900 placeholder-gray-400 bg-white resize-none"
+              class="input resize-none"
               disabled={submitting()}
               required
             />
+          </div>
 
-            <Show when={message()}>
-              {(msg) => (
-                <p
-                  class={`text-xs ${
-                    msg().type === "error" ? "text-red-600" : "text-green-600"
-                  }`}
-                >
-                  {msg().text}
-                </p>
-              )}
-            </Show>
+          <Show when={message()}>
+            {(msg) => (
+              <p
+                class={`text-sm ${
+                  msg().type === "error" ? "text-red-600" : "text-green-600"
+                }`}
+              >
+                {msg().text}
+              </p>
+            )}
+          </Show>
 
-            <div class="flex gap-2">
-              <button
-                type="submit"
-                disabled={
-                  submitting() ||
-                  !name().trim() ||
-                  !systemInstructions().trim() ||
-                  !description().trim()
-                }
-                class="flex-1 px-3 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {submitting() ? "Creating..." : "Create"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsOpen(false);
-                  setName("");
-                  setSystemInstructions("");
-                  setDescription("");
-                  setMessage(null);
-                }}
-                class="px-3 py-2 bg-gray-200 text-gray-700 rounded text-sm hover:bg-gray-300"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      </Show>
+          <div class="flex gap-2 pt-2">
+            <button
+              type="submit"
+              disabled={
+                submitting() ||
+                !name().trim() ||
+                !systemInstructions().trim() ||
+                !description().trim()
+              }
+              class="btn btn-primary flex-1 py-2.5"
+            >
+              {submitting() ? "Creating..." : "Create Agent"}
+            </button>
+            <button
+              type="button"
+              onClick={props.onClose}
+              class="btn btn-secondary px-4 py-2.5"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

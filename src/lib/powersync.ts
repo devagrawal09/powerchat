@@ -12,11 +12,17 @@ import {
 import { uploadData as uploadToServer } from "~/server/powersync";
 import { getPowerSyncToken } from "~/server/powersync-token";
 import { clientSchema } from "~/db/schema/client";
+import { getUsername } from "./getUsername";
 
 // PowerSync connector using SolidStart server functions
 class PowerChatConnector implements PowerSyncBackendConnector {
   async fetchCredentials() {
     console.log("[fetchCredentials] start");
+
+    if (!getUsername()) {
+      throw new Error("No session");
+    }
+
     const { token, expiresAt } = await getPowerSyncToken();
     const endpoint = import.meta.env.VITE_POWERSYNC_SERVICE_URL;
 
@@ -72,6 +78,7 @@ export const powersync = new PowerSyncDatabase({
   schema: powerSyncSchema,
   database: { dbFilename: "powerchat.db" },
 });
+
 export const clientDb = wrapPowerSyncWithDrizzle(powersync, {
   schema: clientSchema,
 });
@@ -81,15 +88,32 @@ const logger = createBaseLogger();
 logger.setLevel(LogLevel.DEBUG);
 
 let isInitialized = false;
+let connectPromise: Promise<void> | null = null;
 
 export async function connectPowerSync() {
   if (isInitialized) {
     return;
   }
 
-  await powersync.connect(connector);
-  await powersync.waitForReady();
-  isInitialized = true;
+  if (!getUsername()) {
+    return;
+  }
+
+  if (connectPromise) {
+    return connectPromise;
+  }
+
+  connectPromise = (async () => {
+    await powersync.connect(connector);
+    await powersync.waitForReady();
+    isInitialized = true;
+  })();
+
+  try {
+    await connectPromise;
+  } finally {
+    connectPromise = null;
+  }
 
   console.log("[getPowerSync] db connected");
 }

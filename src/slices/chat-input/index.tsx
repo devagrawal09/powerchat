@@ -27,11 +27,17 @@ type ChatInputProps = {
 };
 
 export function ChatInput(props: ChatInputProps) {
+  let textareaRef: HTMLTextAreaElement | undefined;
   const [content, setContent] = createSignal("");
   const [activeMentionIndex, setActiveMentionIndex] = createSignal(0);
   const [selectedAgent, setSelectedAgent] = createSignal<SelectedAgent | null>(
     null,
   );
+
+  const autoResize = (el: HTMLTextAreaElement) => {
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  };
 
   const memberName = sql<string>`
     case
@@ -183,73 +189,82 @@ export function ChatInput(props: ChatInputProps) {
   const hasAgent = () => effectiveSelectedAgent() !== null;
 
   return (
-    <div class="border-t border-gray-200 p-4 bg-white">
-      <div class="flex gap-2 relative">
-        <div class="flex-1 relative">
-          <input
-            type="text"
-            value={content()}
-            onInput={(e) => setContent(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              const state = mentionState();
-              if (state.isOpen) {
-                const options = mentionOptions();
-                const isOptionDisabled = (idx: number) => {
-                  const option = options[idx];
-                  return option?.type === "agent" && hasAgent();
-                };
+    <div class="border-t border-gray-200 px-4 py-2 bg-white">
+      <div class="flex gap-2 relative my-0.5">
+        <textarea
+          ref={textareaRef}
+          value={content()}
+          onInput={(e) => {
+            setContent(e.currentTarget.value);
+            autoResize(e.currentTarget);
+          }}
+          onKeyDown={(e) => {
+            const state = mentionState();
+            if (state.isOpen) {
+              const options = mentionOptions();
+              const isOptionDisabled = (idx: number) => {
+                const option = options[idx];
+                return option?.type === "agent" && hasAgent();
+              };
 
-                if (e.key === "ArrowDown") {
-                  e.preventDefault();
-                  let next = activeMentionIndex() + 1;
-                  while (next < options.length && isOptionDisabled(next))
-                    next += 1;
-                  if (next < options.length) setActiveMentionIndex(next);
-                } else if (e.key === "ArrowUp") {
-                  e.preventDefault();
-                  let prev = activeMentionIndex() - 1;
-                  while (prev >= 0 && isOptionDisabled(prev)) prev -= 1;
-                  if (prev >= 0) setActiveMentionIndex(prev);
-                } else if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  const option = options[activeMentionIndex()];
-                  if (option && !(option.type === "agent" && hasAgent())) {
-                    handleMentionSelect(option);
-                  }
-                } else if (e.key === "Escape") {
-                  e.preventDefault();
-                  const before = content().slice(0, state.cursorPosition);
-                  const after = content().slice(
-                    state.cursorPosition + state.query.length + 1,
-                  );
-                  setContent(before + after);
-                  setActiveMentionIndex(0);
-                }
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                let next = activeMentionIndex() + 1;
+                while (next < options.length && isOptionDisabled(next))
+                  next += 1;
+                if (next < options.length) setActiveMentionIndex(next);
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                let prev = activeMentionIndex() - 1;
+                while (prev >= 0 && isOptionDisabled(prev)) prev -= 1;
+                if (prev >= 0) setActiveMentionIndex(prev);
               } else if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                handleSend();
+                const option = options[activeMentionIndex()];
+                if (option && !(option.type === "agent" && hasAgent())) {
+                  handleMentionSelect(option);
+                }
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                const before = content().slice(0, state.cursorPosition);
+                const after = content().slice(
+                  state.cursorPosition + state.query.length + 1,
+                );
+                setContent(before + after);
+                setActiveMentionIndex(0);
               }
-            }}
-            placeholder={`Message #${props.channelName || "channel"}...`}
-            class={`w-full px-4 py-2 border rounded text-gray-900 placeholder-gray-400 bg-white transition-colors ${
-              hasAgent()
-                ? "border-purple-400 ring-1 ring-purple-300 bg-purple-50/30"
-                : "border-gray-300"
-            }`}
-          />
-          <MentionAutocomplete
-            options={mentionOptions()}
-            isOpen={mentionState().isOpen}
-            activeIndex={activeMentionIndex()}
-            disabledAgents={hasAgent()}
-            onSelect={handleMentionSelect}
-            onActiveIndexChange={setActiveMentionIndex}
-          />
-        </div>
+            } else if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSend();
+              // Reset textarea height after send
+              if (textareaRef) {
+                textareaRef.style.height = "auto";
+              }
+            }
+          }}
+          placeholder={`Message #${props.channelName || "channel"}...`}
+          rows={1}
+          class={`input resize-none overflow-hidden transition-colors h-10 ${
+            hasAgent()
+              ? "border-purple-400! ring-1 ring-purple-300 bg-purple-50/30!"
+              : ""
+          }`}
+        />
+        <MentionAutocomplete
+          options={mentionOptions()}
+          isOpen={mentionState().isOpen}
+          activeIndex={activeMentionIndex()}
+          disabledAgents={hasAgent()}
+          onSelect={handleMentionSelect}
+          onActiveIndexChange={setActiveMentionIndex}
+        />
         <button
-          onClick={handleSend}
+          onClick={() => {
+            handleSend();
+            if (textareaRef) textareaRef.style.height = "auto";
+          }}
           disabled={!content().trim()}
-          class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          class="btn btn-primary px-5 h-10"
         >
           Send
         </button>

@@ -35,7 +35,7 @@ describe("CreateChannel", () => {
   });
 
   it("renders form with input and button", () => {
-    render(() => <CreateChannel />);
+    render(() => <CreateChannel onCreated={() => {}} />);
     expect(screen.getByPlaceholderText("New channel name")).toBeInTheDocument();
     expect(screen.getByText("Create Channel")).toBeInTheDocument();
   });
@@ -45,10 +45,10 @@ describe("CreateChannel", () => {
       () =>
         new Promise((resolve) => {
           setTimeout(resolve, 1000);
-        })
+        }),
     );
 
-    render(() => <CreateChannel />);
+    render(() => <CreateChannel onCreated={() => {}} />);
     const input = screen.getByPlaceholderText("New channel name");
     const button = screen.getByText("Create Channel");
 
@@ -61,7 +61,7 @@ describe("CreateChannel", () => {
   it("calls writeTransaction with correct data", async () => {
     mockTransaction.mockResolvedValue(undefined);
 
-    render(() => <CreateChannel />);
+    render(() => <CreateChannel onCreated={() => {}} />);
     const input = screen.getByPlaceholderText("New channel name");
     const form = input.closest("form")!;
 
@@ -77,9 +77,9 @@ describe("CreateChannel", () => {
   it("clears form after successful creation", async () => {
     mockTransaction.mockResolvedValue(undefined);
 
-    render(() => <CreateChannel />);
+    render(() => <CreateChannel onCreated={() => {}} />);
     const input = screen.getByPlaceholderText(
-      "New channel name"
+      "New channel name",
     ) as HTMLInputElement;
     const form = input.closest("form")!;
 
@@ -95,9 +95,9 @@ describe("CreateChannel", () => {
   });
 
   it("requires minimum 2 characters", () => {
-    render(() => <CreateChannel />);
+    render(() => <CreateChannel onCreated={() => {}} />);
     const input = screen.getByPlaceholderText(
-      "New channel name"
+      "New channel name",
     ) as HTMLInputElement;
 
     expect(input.minLength).toBe(2);
@@ -107,7 +107,7 @@ describe("CreateChannel", () => {
   it("validates channel name before submission", async () => {
     mockTransaction.mockResolvedValue(undefined);
 
-    render(() => <CreateChannel />);
+    render(() => <CreateChannel onCreated={() => {}} />);
     const input = screen.getByPlaceholderText("New channel name");
     const form = input.closest("form")!;
 

@@ -31,6 +31,7 @@ type WorkspaceNodeRow = typeof workspaceNodes.$inferInsert;
 type WorkspaceDatabase = typeof db;
 
 let watcherStartPromise: Promise<FSWatcher | null> | null = null;
+let watcherStartupFailed = false;
 
 function isPathInside(rootPath: string, candidatePath: string) {
   const relativePath = path.relative(rootPath, candidatePath);
@@ -398,56 +399,69 @@ export async function ensureWorkspaceNodeIndexerStarted(
     return null;
   }
 
+  if (watcherStartupFailed) {
+    return null;
+  }
+
   if (!watcherStartPromise) {
     watcherStartPromise = (async () => {
-      await mkdir(channelWorkspaceRoot, { recursive: true });
-      await refreshAllWorkspaceIndexes(workspaceDatabase, channelWorkspaceRoot);
+      try {
+        await mkdir(channelWorkspaceRoot, { recursive: true });
+        await refreshAllWorkspaceIndexes(
+          workspaceDatabase,
+          channelWorkspaceRoot,
+        );
 
-      const workspaceWatcher = chokidar.watch(channelWorkspaceRoot, {
-        ignoreInitial: true,
-        persistent: true,
-      });
+        const workspaceWatcher = chokidar.watch(channelWorkspaceRoot, {
+          ignoreInitial: true,
+          persistent: true,
+        });
 
-      workspaceWatcher.on("add", (absolutePath) => {
-        handleWorkspaceNodeUpsert(absolutePath, workspaceDatabase).catch(
-          (error) => {
-            logWorkspaceIndexerError("add", absolutePath, error);
-          },
-        );
-      });
-      workspaceWatcher.on("change", (absolutePath) => {
-        handleWorkspaceNodeUpsert(absolutePath, workspaceDatabase).catch(
-          (error) => {
-            logWorkspaceIndexerError("change", absolutePath, error);
-          },
-        );
-      });
-      workspaceWatcher.on("addDir", (absolutePath) => {
-        handleWorkspaceNodeUpsert(absolutePath, workspaceDatabase).catch(
-          (error) => {
-            logWorkspaceIndexerError("addDir", absolutePath, error);
-          },
-        );
-      });
-      workspaceWatcher.on("unlink", (absolutePath) => {
-        handleWorkspaceNodeDelete(absolutePath, workspaceDatabase).catch(
-          (error) => {
-            logWorkspaceIndexerError("unlink", absolutePath, error);
-          },
-        );
-      });
-      workspaceWatcher.on("unlinkDir", (absolutePath) => {
-        handleWorkspaceNodeDelete(absolutePath, workspaceDatabase).catch(
-          (error) => {
-            logWorkspaceIndexerError("unlinkDir", absolutePath, error);
-          },
-        );
-      });
-      workspaceWatcher.on("error", (error) => {
-        console.error("[workspace-node-indexer] watcher error", error);
-      });
+        workspaceWatcher.on("add", (absolutePath) => {
+          handleWorkspaceNodeUpsert(absolutePath, workspaceDatabase).catch(
+            (error) => {
+              logWorkspaceIndexerError("add", absolutePath, error);
+            },
+          );
+        });
+        workspaceWatcher.on("change", (absolutePath) => {
+          handleWorkspaceNodeUpsert(absolutePath, workspaceDatabase).catch(
+            (error) => {
+              logWorkspaceIndexerError("change", absolutePath, error);
+            },
+          );
+        });
+        workspaceWatcher.on("addDir", (absolutePath) => {
+          handleWorkspaceNodeUpsert(absolutePath, workspaceDatabase).catch(
+            (error) => {
+              logWorkspaceIndexerError("addDir", absolutePath, error);
+            },
+          );
+        });
+        workspaceWatcher.on("unlink", (absolutePath) => {
+          handleWorkspaceNodeDelete(absolutePath, workspaceDatabase).catch(
+            (error) => {
+              logWorkspaceIndexerError("unlink", absolutePath, error);
+            },
+          );
+        });
+        workspaceWatcher.on("unlinkDir", (absolutePath) => {
+          handleWorkspaceNodeDelete(absolutePath, workspaceDatabase).catch(
+            (error) => {
+              logWorkspaceIndexerError("unlinkDir", absolutePath, error);
+            },
+          );
+        });
+        workspaceWatcher.on("error", (error) => {
+          console.error("[workspace-node-indexer] watcher error", error);
+        });
 
-      return workspaceWatcher;
+        return workspaceWatcher;
+      } catch (error) {
+        watcherStartupFailed = true;
+        console.warn("[workspace-node-indexer] disabled", error);
+        return null;
+      }
     })();
   }
 

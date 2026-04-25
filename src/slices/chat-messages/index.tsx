@@ -126,7 +126,29 @@ export function ChatMessages(props: ChatMessagesProps) {
     >
       <Show
         when={messages().data.length > 0}
-        fallback={<div class="text-sm text-gray-500">No messages yet</div>}
+        fallback={
+          <div class="flex-1 flex items-center justify-center">
+            <div class="text-center max-w-xs">
+              <svg
+                class="mx-auto mb-3 text-gray-300"
+                width="40"
+                height="40"
+                viewBox="0 0 40 40"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M10 30V26H7C5.34 26 4 24.66 4 23V9C4 7.34 5.34 6 7 6H33C34.66 6 36 7.34 36 9V23C36 24.66 34.66 26 33 26H19L10 30Z" />
+                <line x1="12" y1="13" x2="28" y2="13" />
+                <line x1="12" y1="18" x2="22" y2="18" />
+              </svg>
+              <p class="text-sm font-medium text-gray-500">No messages yet</p>
+              <p class="text-xs text-gray-400 mt-1">Be the first to say something!</p>
+            </div>
+          </div>
+        }
       >
         <For each={messages().data}>
           {(message) => {
