@@ -5,6 +5,39 @@ import path from "node:path";
 import { workspaceNodes } from "~/db/schema/server";
 import { db } from "./db";
 
+/**
+ * Directories to always ignore when indexing workspace nodes.
+ * These are typically large, generated, or internal directories
+ * that would flood the database with unnecessary entries.
+ */
+const IGNORED_DIRECTORY_NAMES = new Set([
+  ".git",
+  "node_modules",
+  ".next",
+  ".nuxt",
+  ".svelte-kit",
+  ".output",
+  ".vercel",
+  ".turbo",
+  ".cache",
+  ".parcel-cache",
+  "dist",
+  "build",
+  "out",
+  ".expo",
+  "__pycache__",
+  ".venv",
+  "venv",
+  ".tox",
+  ".mypy_cache",
+  ".pytest_cache",
+  "target",
+  ".gradle",
+  ".idea",
+  ".vscode",
+  ".DS_Store",
+]);
+
 export const channelWorkspaceRoot = path.resolve(
   process.cwd(),
   ".mastra-workspaces",
@@ -32,6 +65,10 @@ type WorkspaceDatabase = typeof db;
 
 let watcherStartPromise: Promise<FSWatcher | null> | null = null;
 let watcherStartupFailed = false;
+
+function isIgnoredName(name: string) {
+  return IGNORED_DIRECTORY_NAMES.has(name);
+}
 
 function isPathInside(rootPath: string, candidatePath: string) {
   const relativePath = path.relative(rootPath, candidatePath);
@@ -179,6 +216,10 @@ async function walkWorkspaceDirectory(
   });
 
   for (const entry of sortedEntries) {
+    if (isIgnoredName(entry.name)) {
+      continue;
+    }
+
     const relativeEntryPath = relativeDirectoryPath
       ? `${relativeDirectoryPath}/${entry.name}`
       : entry.name;
@@ -392,6 +433,104 @@ function logWorkspaceIndexerError(
   });
 }
 
+/**
+ * Debounce delay (ms) for batching workspace node changes.
+ * When a burst of file events arrives (e.g. git clone), we collect
+ * affected channel IDs and do a single full rescan per channel
+ * instead of individual upserts per file.
+ */
+const BATCH_DEBOUNCE_MS = 500;
+
+/**
+ * If a channel accumulates more than this many pending events
+ * before the debounce fires, switch to a full channel rescan
+ * instead of individual upserts/deletes.
+ */
+const BATCH_THRESHOLD = 20;
+
+type PendingEvent = {
+  type: "upsert" | "delete";
+  absolutePath: string;
+};
+
+function createWorkspaceEventBatcher(workspaceDatabase: WorkspaceDatabase) {
+  const pendingByChannel = new Map<string, PendingEvent[]>();
+  const timers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  async function flushChannel(channelId: string) {
+    const events = pendingByChannel.get(channelId);
+    pendingByChannel.delete(channelId);
+    timers.delete(channelId);
+
+    if (!events || events.length === 0) {
+      return;
+    }
+
+    if (events.length > BATCH_THRESHOLD) {
+      // Too many events — do a full rescan for this channel
+      try {
+        await refreshChannelWorkspaceIndex(channelId, workspaceDatabase);
+      } catch (error) {
+        logWorkspaceIndexerError("batch-refresh", channelId, error);
+      }
+      return;
+    }
+
+    // Process events sequentially to avoid pool exhaustion
+    for (const event of events) {
+      try {
+        if (event.type === "upsert") {
+          await handleWorkspaceNodeUpsert(
+            event.absolutePath,
+            workspaceDatabase,
+          );
+        } else {
+          await handleWorkspaceNodeDelete(
+            event.absolutePath,
+            workspaceDatabase,
+          );
+        }
+      } catch (error) {
+        logWorkspaceIndexerError(event.type, event.absolutePath, error);
+      }
+    }
+  }
+
+  function enqueue(
+    type: "upsert" | "delete",
+    absolutePath: string,
+  ) {
+    const target = getWorkspaceTargetFromAbsolutePath(absolutePath);
+    if (!target) {
+      return;
+    }
+
+    const channelId = target.channelId;
+
+    if (!pendingByChannel.has(channelId)) {
+      pendingByChannel.set(channelId, []);
+    }
+    pendingByChannel.get(channelId)!.push({ type, absolutePath });
+
+    // Reset the debounce timer for this channel
+    const existingTimer = timers.get(channelId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    timers.set(
+      channelId,
+      setTimeout(() => {
+        flushChannel(channelId).catch((error) => {
+          logWorkspaceIndexerError("flush", channelId, error);
+        });
+      }, BATCH_DEBOUNCE_MS),
+    );
+  }
+
+  return { enqueue };
+}
+
 export async function ensureWorkspaceNodeIndexerStarted(
   workspaceDatabase: WorkspaceDatabase = db,
 ) {
@@ -412,45 +551,31 @@ export async function ensureWorkspaceNodeIndexerStarted(
           channelWorkspaceRoot,
         );
 
+        const batcher = createWorkspaceEventBatcher(workspaceDatabase);
+
         const workspaceWatcher = chokidar.watch(channelWorkspaceRoot, {
           ignoreInitial: true,
           persistent: true,
+          ignored: (filePath: string) => {
+            const name = path.basename(filePath);
+            return isIgnoredName(name);
+          },
         });
 
         workspaceWatcher.on("add", (absolutePath) => {
-          handleWorkspaceNodeUpsert(absolutePath, workspaceDatabase).catch(
-            (error) => {
-              logWorkspaceIndexerError("add", absolutePath, error);
-            },
-          );
+          batcher.enqueue("upsert", absolutePath);
         });
         workspaceWatcher.on("change", (absolutePath) => {
-          handleWorkspaceNodeUpsert(absolutePath, workspaceDatabase).catch(
-            (error) => {
-              logWorkspaceIndexerError("change", absolutePath, error);
-            },
-          );
+          batcher.enqueue("upsert", absolutePath);
         });
         workspaceWatcher.on("addDir", (absolutePath) => {
-          handleWorkspaceNodeUpsert(absolutePath, workspaceDatabase).catch(
-            (error) => {
-              logWorkspaceIndexerError("addDir", absolutePath, error);
-            },
-          );
+          batcher.enqueue("upsert", absolutePath);
         });
         workspaceWatcher.on("unlink", (absolutePath) => {
-          handleWorkspaceNodeDelete(absolutePath, workspaceDatabase).catch(
-            (error) => {
-              logWorkspaceIndexerError("unlink", absolutePath, error);
-            },
-          );
+          batcher.enqueue("delete", absolutePath);
         });
         workspaceWatcher.on("unlinkDir", (absolutePath) => {
-          handleWorkspaceNodeDelete(absolutePath, workspaceDatabase).catch(
-            (error) => {
-              logWorkspaceIndexerError("unlinkDir", absolutePath, error);
-            },
-          );
+          batcher.enqueue("delete", absolutePath);
         });
         workspaceWatcher.on("error", (error) => {
           console.error("[workspace-node-indexer] watcher error", error);
