@@ -6,7 +6,7 @@ import { agentRuns, agents, messages, users } from "~/db/schema/server";
 import { getChannelWorkspace } from "./channel-workspace";
 import { db } from "./db";
 
-const defaultModel = "openrouter/anthropic/claude-haiku-4.5";
+const defaultModel = "openrouter/anthropic/claude-sonnet-4.5";
 
 type MessageHistoryRow = {
   author_type: string;

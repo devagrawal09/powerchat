@@ -496,10 +496,7 @@ function createWorkspaceEventBatcher(workspaceDatabase: WorkspaceDatabase) {
     }
   }
 
-  function enqueue(
-    type: "upsert" | "delete",
-    absolutePath: string,
-  ) {
+  function enqueue(type: "upsert" | "delete", absolutePath: string) {
     const target = getWorkspaceTargetFromAbsolutePath(absolutePath);
     if (!target) {
       return;

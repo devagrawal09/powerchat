@@ -1,4 +1,4 @@
-import { JSX, Show } from "solid-js";
+import { JSX, Show, createSignal } from "solid-js";
 import { ChannelList } from "~/slices/channel-list";
 import { UsernameCheck } from "~/slices/username-check";
 import { UsernameRegistration } from "~/slices/username-registration";
@@ -7,6 +7,7 @@ import { useSession } from "~/lib/session";
 export default function ChatLayout(props: { children?: JSX.Element }) {
   const usernameCheck = UsernameCheck();
   const session = useSession();
+  const [collapsed, setCollapsed] = createSignal(false);
 
   const handleUsernameSet = (username: string) => {
     // Cookie is set by mutation slice, query slice will detect it
@@ -25,9 +26,12 @@ export default function ChatLayout(props: { children?: JSX.Element }) {
 
       <div class="flex h-screen bg-gray-50">
         {/* Sidebar */}
-        <div class="w-64 bg-white border-r border-gray-200 flex flex-col text-gray-900">
+        <div
+          class="bg-white border-r border-gray-200 flex flex-col text-gray-900 transition-all duration-200 overflow-hidden shrink-0"
+          style={{ width: collapsed() ? "0px" : "256px" }}
+        >
           <div class="h-12 px-4 flex items-center border-b border-gray-200 shrink-0">
-            <h1 class="text-xl font-bold text-gray-900">PowerChat</h1>
+            <h1 class="text-xl font-bold text-gray-900 flex-1">PowerChat</h1>
           </div>
 
           <ChannelList />
@@ -52,7 +56,16 @@ export default function ChatLayout(props: { children?: JSX.Element }) {
                     class="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-400 hover:text-red-600"
                     title="Sign out"
                   >
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
                       <path d="M6 14H3.33C2.6 14 2 13.4 2 12.67V3.33C2 2.6 2.6 2 3.33 2H6" />
                       <polyline points="10.67 11.33 14 8 10.67 4.67" />
                       <line x1="14" y1="8" x2="6" y2="8" />
@@ -65,7 +78,34 @@ export default function ChatLayout(props: { children?: JSX.Element }) {
         </div>
 
         {/* Main content */}
-        <div class="flex-1 flex flex-col">{props.children}</div>
+        <div class="flex-1 flex flex-col min-w-0 relative">
+          {/* Left panel toggle button */}
+          <button
+            type="button"
+            onClick={() => setCollapsed((c) => !c)}
+            class="absolute left-0 top-3 z-20 w-5 h-6 bg-white border border-l-0 border-gray-200 rounded-r flex items-center justify-center hover:bg-gray-50 transition-colors text-gray-400 hover:text-gray-600"
+            title={collapsed() ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 10 10"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <Show when={collapsed()}>
+                <polyline points="3,2 7,5 3,8" />
+              </Show>
+              <Show when={!collapsed()}>
+                <polyline points="7,2 3,5 7,8" />
+              </Show>
+            </svg>
+          </button>
+          {props.children}
+        </div>
       </div>
     </>
   );

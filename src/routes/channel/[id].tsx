@@ -44,6 +44,7 @@ export default function ChannelPage() {
     createSignal<ChannelInspectorState>(null);
   const [activeTab, setActiveTab] = createSignal<RightTab>("members");
   const [showCreateAgent, setShowCreateAgent] = createSignal(false);
+  const [rightCollapsed, setRightCollapsed] = createSignal(false);
 
   const channel = useQuery(() =>
     liveQuery(
@@ -140,60 +141,82 @@ export default function ChannelPage() {
           </div>
 
           {/* Right sidebar with tabs */}
-          <div class="w-64 border-l border-gray-200 bg-white flex flex-col">
-            {/* Tab bar */}
-            <div class="h-12 flex items-end border-b border-gray-200 shrink-0">
-              <For each={tabs}>
-                {(tab) => (
-                  <button
-                    type="button"
-                    onClick={() => startTransition(() => setActiveTab(tab.id))}
-                    class={`flex-1 px-2 py-2.5 text-xs font-medium transition-colors relative ${
-                      activeTab() === tab.id
-                        ? "text-blue-600"
-                        : "text-gray-500 hover:text-gray-700"
-                    }`}
-                  >
-                    {tab.label}
-                    <Show when={activeTab() === tab.id}>
-                      <div class="absolute bottom-0 left-2 right-2 h-0.5 bg-blue-600 rounded-full" />
-                    </Show>
-                  </button>
-                )}
-              </For>
-            </div>
+          <div class="relative flex shrink-0">
+            {/* Toggle button on the left edge of the right sidebar */}
+            <button
+              type="button"
+              onClick={() => setRightCollapsed((c) => !c)}
+              class="absolute -left-5 top-3 z-20 w-5 h-6 bg-white border border-r-0 border-gray-200 rounded-l flex items-center justify-center hover:bg-gray-50 transition-colors text-gray-400 hover:text-gray-600"
+              title={rightCollapsed() ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <Show when={rightCollapsed()}>
+                  <polyline points="7,2 3,5 7,8" />
+                </Show>
+                <Show when={!rightCollapsed()}>
+                  <polyline points="3,2 7,5 3,8" />
+                </Show>
+              </svg>
+            </button>
 
-            {/* Tab content */}
-            <div class="flex-1 overflow-y-auto p-4">
-              <Show when={activeTab() === "members"}>
-                <ChannelMemberList channelId={channelId()} />
-                <div class="mt-4 pt-4 border-t border-gray-100">
-                  <ChannelInvite channelId={channelId()} />
-                </div>
-              </Show>
+            <div
+              class="border-l border-gray-200 bg-white flex flex-col transition-all duration-200 overflow-hidden"
+              style={{ width: rightCollapsed() ? "0px" : "256px" }}
+            >
+              {/* Tab bar */}
+              <div class="h-12 flex items-end border-b border-gray-200 shrink-0">
+                <For each={tabs}>
+                  {(tab) => (
+                    <button
+                      type="button"
+                      onClick={() => startTransition(() => setActiveTab(tab.id))}
+                      class={`flex-1 px-2 py-2.5 text-xs font-medium transition-colors relative ${
+                        activeTab() === tab.id
+                          ? "text-blue-600"
+                          : "text-gray-500 hover:text-gray-700"
+                      }`}
+                    >
+                      {tab.label}
+                      <Show when={activeTab() === tab.id}>
+                        <div class="absolute bottom-0 left-2 right-2 h-0.5 bg-blue-600 rounded-full" />
+                      </Show>
+                    </button>
+                  )}
+                </For>
+              </div>
 
-              <Show when={activeTab() === "agents"}>
-                <ChannelAgentsList
-                  channelId={channelId()}
-                  onAgentClick={handleAgentClick}
-                />
-                <div class="mt-4 pt-4 border-t border-gray-100">
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateAgent(true)}
-                    class="btn btn-primary w-full py-2"
-                  >
-                    Create Agent
-                  </button>
-                </div>
-              </Show>
+              {/* Tab content */}
+              <div class="flex-1 overflow-y-auto p-4">
+                <Show when={activeTab() === "members"}>
+                  <ChannelMemberList channelId={channelId()} />
+                  <div class="mt-4 pt-4 border-t border-gray-100">
+                    <ChannelInvite channelId={channelId()} />
+                  </div>
+                </Show>
 
-              <Show when={activeTab() === "workspace"}>
-                <ChannelWorkspaceTree
-                  channelId={channelId()}
-                  onFileSelect={handleWorkspaceFileSelect}
-                />
-              </Show>
+                <Show when={activeTab() === "agents"}>
+                  <ChannelAgentsList
+                    channelId={channelId()}
+                    onAgentClick={handleAgentClick}
+                  />
+                  <div class="mt-4 pt-4 border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateAgent(true)}
+                      class="btn btn-primary w-full py-2"
+                    >
+                      Create Agent
+                    </button>
+                  </div>
+                </Show>
+
+                <Show when={activeTab() === "workspace"}>
+                  <ChannelWorkspaceTree
+                    channelId={channelId()}
+                    onFileSelect={handleWorkspaceFileSelect}
+                  />
+                </Show>
+              </div>
             </div>
           </div>
 
